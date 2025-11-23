@@ -1,0 +1,25 @@
+#!/bin/bash
+# Script de prueba rápida: restauración de .bak, análisis y autofix
+
+cd ~/src/kernel/linux/init || exit
+
+# Restaurar todos los archivos .bak a sus originales
+echo "[RESTORE] Restaurando archivos .bak..."
+shopt -s nullglob
+for bak in *.bak; do
+    orig="${bak%.bak}"
+    echo "[RESTORE] Restaurando $orig desde $bak"
+    mv -f "$bak" "$orig"
+done
+shopt -u nullglob
+echo "[RESTORE] Restauración completada."
+echo
+
+# Volver al directorio del checkpatch
+cd /home/kilynho/src/checkpatch/ || exit
+
+# Ejecutar análisis con checkpatch_analyzer_json
+python3 checkpatch_analyzer.py ~/src/kernel/linux --paths init --workers 4 --json json/checkpatch.json
+
+# Ejecutar autofix
+python3 checkpatch_autofix.py json/checkpatch.json
