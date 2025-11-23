@@ -49,4 +49,6 @@ ASM_INCLUDE_MAP = {
 	"<asm/div64.h>": "<linux/math64.h>",
 	"<asm/atomic.h>": "<linux/atomic.h>",
 	"<asm/byteorder.h>": "<linux/byteorder.h>",
+	"<asm/io.h>": "<linux/io.h>",
+	"<asm/cacheflush.h>": "<linux/cacheflush.h>",
 }

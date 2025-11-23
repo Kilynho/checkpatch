@@ -29,7 +29,6 @@ from fix_constants import (
 )
 
 def fix_missing_blank_line(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_missing_blank_line ({file_path}:{line_number})")
     def callback(lines, idx):
         if idx < 0:
             return False
@@ -49,7 +48,6 @@ def fix_missing_blank_line(file_path, line_number):
     return apply_lines_callback(file_path, line_number, callback)
 
 def fix_quoted_string_split(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_quoted_string_split ({file_path}:{line_number})")
     def callback(lines, idx):
         target = idx - 1
         if target < 0 or target + 1 >= len(lines):
@@ -68,7 +66,6 @@ def fix_quoted_string_split(file_path, line_number):
     return apply_lines_callback(file_path, line_number, callback)
 
 def fix_assignment_in_if(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_assignment_in_if ({file_path}:{line_number})")
     def callback(lines, idx):
         if idx < 0 or idx >= len(lines):
             return False
@@ -291,7 +288,6 @@ def fix_assignment_in_if(file_path, line_number):
     return apply_lines_callback(file_path, line_number, callback)
 
 def fix_switch_case_indent(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_switch_case_indent ({file_path}:{line_number})")
     def callback(lines, idx):
         if idx < 0 or idx >= len(lines):
             return False
@@ -348,60 +344,83 @@ def fix_initconst(file_path, line_number):
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_prefer_notice(file_path, line_number):
-    def transform(line):
-        if "printk(KERN_NOTICE" in line:
-            return line.replace("printk(KERN_NOTICE ", "pr_notice(", 1)
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_void_return(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_void_return ({file_path}:{line_number})")
-    def transform(line):
-        if line.strip() == "return;":
-            return ""
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_unnecessary_braces(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_unnecessary_braces ({file_path}:{line_number})")
     def callback(lines, idx):
-        if idx < 1 or idx+1 >= len(lines):
-            return False
-        if lines[idx].strip() != "{":
-            return False
-        if idx+2 >= len(lines) or lines[idx+2].strip() != "}":
-            return False
-        del lines[idx+2]
-        del lines[idx]
-        return True
-
+        line = lines[idx]
+        if "printk(KERN_NOTICE " in line and '"' in line:
+            lines[idx] = line.replace("printk(KERN_NOTICE ", "pr_notice(", 1)
+            return True
+        elif "printk(KERN_NOTICE" in line and '"' not in line:
+            if idx + 1 < len(lines):
+                next_line = lines[idx + 1]
+                indent = re.match(r'(\s*)', line).group(1)
+                lines[idx] = indent + "pr_notice(" + next_line.strip()
+                del lines[idx + 1]
+                return True
+        return False
     return apply_lines_callback(file_path, line_number, callback)
 
-def fix_block_comment_trailing(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_block_comment_trailing ({file_path}:{line_number})")
+def fix_void_return(file_path, line_number):
     def callback(lines, idx):
-        if idx < 0 or idx >= len(lines):
-            return False
         line = lines[idx]
-        if "*/" in line and not line.strip().endswith("*/"):
-            new_line = line.replace("*/", "").rstrip()
-            lines[idx] = new_line
-            lines.insert(idx + 1, " */\n")
+        if re.match(r'^\s*return\s*;\s*$', line):
+            del lines[idx]
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_unnecessary_braces(file_path, line_number):
+    def callback(lines, idx):
+        # Checkpatch reports on the if/for/while line
+        # Look for opening brace on same line or next line
+        line = lines[idx]
+        if line.rstrip().endswith('{'):
+            # Brace at end of current line: "if (x) {"
+            # Find the single statement (idx+1) and closing brace (idx+2)
+            if idx + 2 >= len(lines):
+                return False
+            if lines[idx + 2].strip() != '}':
+                return False
+            # Remove braces: change "if (x) {" to "if (x)"
+            lines[idx] = line.rstrip()[:-1].rstrip() + '\n'
+            del lines[idx + 2]  # Remove }
+            return True
+        elif idx + 1 < len(lines) and lines[idx + 1].strip() == '{':
+            # Brace on next line alone
+            if idx + 3 >= len(lines):
+                return False
+            if lines[idx + 3].strip() != '}':
+                return False
+            # Remove lines with braces
+            del lines[idx + 3]  # Remove }
+            del lines[idx + 1]  # Remove {
             return True
         return False
 
     return apply_lines_callback(file_path, line_number, callback)
 
+def fix_block_comment_trailing(file_path, line_number):
+    def callback(lines, idx):
+        line = lines[idx]
+        if line.rstrip().endswith('*/') and not re.match(r'^\s*\*/\s*$', line):
+            content = line.rstrip()[:-2].rstrip()
+            indent = re.match(r'^(\s*)', line).group(1)
+            lines[idx] = content + '\n'
+            lines.insert(idx + 1, indent + ' */')
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
 def fix_char_array_static_const(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_char_array_static_const ({file_path}:{line_number})")
     def transform(line):
-        if CHAR_ARRAY_PATTERN.search(line) and "static" not in line:
+        match = CHAR_ARRAY_PATTERN.search(line)
+        if match and "static" not in line:
             return line.replace("char", "static const char", 1)
+        elif "static char" in line and "const" not in line:
+            return line.replace("static char", "static const char", 1)
         return None
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_spdx_comment(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_spdx_comment ({file_path}:{line_number})")
     def transform(line):
         if line.strip().startswith("// SPDX-"):
             return "/* " + line.strip()[3:] + " */\n"
@@ -409,26 +428,15 @@ def fix_spdx_comment(file_path, line_number):
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_extern_in_c(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_extern_in_c ({file_path}:{line_number})")
     def callback(lines, idx):
-        if idx < 0 or idx >= len(lines):
-            return False
         line = lines[idx]
-        if not EXTERN_DECL_PATTERN.match(line):
-            return False
-        m = EXTERN_CAPTURE_PATTERN.match(line)
-        if m:
-            varname = m.group(1)
-            for j, l in enumerate(lines):
-                if j != idx and re.search(rf"\b{re.escape(varname)}\b", l):
-                    return False
-        lines[idx] = "// " + line
-        return True
-
+        if "extern" in line:
+            del lines[idx]
+            return True
+        return False
     return apply_lines_callback(file_path, line_number, callback)
 
 def fix_symbolic_permissions(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_symbolic_permissions ({file_path}:{line_number})")
     def transform(line):
         if "S_IRUSR" in line and "S_IWUSR" in line:
             return SYMBOLIC_PERMS_PATTERN.sub("0600", line)
@@ -436,40 +444,189 @@ def fix_symbolic_permissions(file_path, line_number):
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_printk_info(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_info ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_INFO" in line:
-            new_line = line.replace("printk(KERN_INFO", "pr_info")
-            return new_line
-        return None
-    return apply_line_transform(file_path, line_number, transform)
+    def callback(lines, idx):
+        line = lines[idx]
+        if "printk(KERN_INFO " in line and '"' in line:
+            lines[idx] = line.replace("printk(KERN_INFO ", "pr_info(", 1)
+            return True
+        if idx > 0 and "printk(KERN_INFO" in lines[idx - 1] and '"' in line:
+            indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
+            lines[idx] = indent + "pr_info(" + line.strip()
+            del lines[idx - 1]
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
 
 def fix_printk_err(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_err ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_ERR" in line:
-            return line.replace("printk(KERN_ERR", "pr_err")
-        return None
-    return apply_line_transform(file_path, line_number, transform)
+    def callback(lines, idx):
+        line = lines[idx]
+        # Caso 1: Todo en una línea
+        if "printk(KERN_ERR " in line and '"' in line:
+            lines[idx] = line.replace("printk(KERN_ERR ", "pr_err(", 1)
+            return True
+        # Caso 2: Multilínea - KERN_ERR en línea anterior
+        if idx > 0 and "printk(KERN_ERR" in lines[idx - 1] and '"' in line:
+            # Combinar: quitar la línea anterior y poner pr_err en la actual
+            indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
+            lines[idx] = indent + "pr_err(" + line.strip()
+            del lines[idx - 1]
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
 
 def fix_printk_warn(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_warn ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_WARNING" in line:
-            return line.replace("printk(KERN_WARNING", "pr_warn")
-        return None
-    return apply_line_transform(file_path, line_number, transform)
+    def callback(lines, idx):
+        line = lines[idx]
+        if "printk(KERN_WARNING " in line and '"' in line:
+            lines[idx] = line.replace("printk(KERN_WARNING ", "pr_warn(", 1)
+            return True
+        if idx > 0 and "printk(KERN_WARNING" in lines[idx - 1] and '"' in line:
+            indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
+            lines[idx] = indent + "pr_warn(" + line.strip()
+            del lines[idx - 1]
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
 
 def fix_printk_debug(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_debug ({file_path}:{line_number})")
+    def callback(lines, idx):
+        line = lines[idx]
+        if "printk(KERN_DEBUG " in line and '"' in line:
+            lines[idx] = line.replace("printk(KERN_DEBUG ", "pr_debug(", 1)
+            return True
+        if idx > 0 and "printk(KERN_DEBUG" in lines[idx - 1] and '"' in line:
+            indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
+            lines[idx] = indent + "pr_debug(" + line.strip()
+            del lines[idx - 1]
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_printk_emerg(file_path, line_number):
+    def callback(lines, idx):
+        line = lines[idx]
+        if "printk(KERN_EMERG " in line and '"' in line:
+            lines[idx] = line.replace("printk(KERN_EMERG ", "pr_emerg(", 1)
+            return True
+        if idx > 0 and "printk(KERN_EMERG" in lines[idx - 1] and '"' in line:
+            indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
+            lines[idx] = indent + "pr_emerg(" + line.strip()
+            del lines[idx - 1]
+            return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_printk_kern_level(file_path, line_number):
     def transform(line):
-        if "printk(KERN_DEBUG" in line:
-            return line.replace("printk(KERN_DEBUG", "pr_debug")
+        # Detectar printk sin KERN_* level
+        if 'printk(' in line and 'KERN_' not in line:
+            # Si termina con \n"), probablemente sea continuación
+            if line.rstrip().endswith('\\n")') or line.rstrip().endswith('\\n");'):
+                # Añadir KERN_INFO después de printk(
+                return line.replace('printk("', 'printk(KERN_INFO "', 1)
+            # Si no tiene comillas en la misma línea, puede ser multilínea
+            elif '"' not in line and 'printk(' in line:
+                return line.replace('printk(', 'printk(KERN_INFO ', 1)
+            # Caso de continuación (sin \n al final del string)
+            else:
+                # Probablemente sea KERN_CONT
+                return line.replace('printk("', 'printk(KERN_CONT "', 1)
         return None
     return apply_line_transform(file_path, line_number, transform)
 
+def fix_jiffies_comparison(file_path, line_number):
+    def transform(line):
+        # Detectar comparaciones directas de jiffies
+        # Reemplazar: jiffies != X -> time_after(jiffies, X)
+        if 'jiffies !=' in line or '!= jiffies' in line:
+            # Capturar la comparación
+            match = re.search(r'(\w+)\s*!=\s*jiffies', line)
+            if match:
+                var = match.group(1)
+                return line.replace(f'{var} != jiffies', f'time_after(jiffies, {var})')
+            match = re.search(r'jiffies\s*!=\s*(\w+)', line)
+            if match:
+                var = match.group(1)
+                return line.replace(f'jiffies != {var}', f'time_after(jiffies, {var})')
+        
+        # Reemplazar: jiffies == X -> time_before_eq(jiffies, X) o !time_after(jiffies, X)
+        # Usamos la negación de time_after para == 
+        if 'jiffies ==' in line or '== jiffies' in line:
+            match = re.search(r'(\w+)\s*==\s*jiffies', line)
+            if match:
+                var = match.group(1)
+                return line.replace(f'{var} == jiffies', f'!time_after(jiffies, {var})')
+            match = re.search(r'jiffies\s*==\s*(\w+)', line)
+            if match:
+                var = match.group(1)
+                return line.replace(f'jiffies == {var}', f'!time_after(jiffies, {var})')
+        
+        return None
+    return apply_line_transform(file_path, line_number, transform)
+
+def fix_func_name_in_string(file_path, line_number):
+    def transform(line):
+        # Buscar nombres de función en strings que deberían ser __func__
+        # Patrón común: "function_name:" o "function_name " o "function_name="
+        # Checkpatch ya nos dice cuál es el nombre, así que buscamos cualquier identificador entre comillas
+        match = re.search(r'"([a-zA-Z_][a-zA-Z0-9_]+)[\s:=]', line)
+        if match:
+            func_name = match.group(1)
+            # Reemplazar el nombre hardcoded por %s y añadir , __func__
+            # Buscar el string completo para insertar %s y __func__
+            if f'"{func_name}' in line:
+                # Reemplazar "func_name" por "%s" y añadir __func__ después del string
+                new_line = line.replace(f'"{func_name}', '"%s')
+                # Encontrar dónde termina el string para insertar __func__
+                # Buscar el final del string literal (comillas de cierre antes del paréntesis)
+                if '")' in new_line or '");' in new_line:
+                    new_line = new_line.replace('")', '", __func__)')
+                    new_line = new_line.replace('");', '", __func__);')
+                return new_line
+        return None
+    return apply_line_transform(file_path, line_number, transform)
+
+def fix_else_after_return(file_path, line_number):
+    def callback(lines, idx):
+        line = lines[idx]
+        # La línea reportada es la del else
+        if '} else {' in line.strip() or line.strip() == 'else {':
+            # Quitar el else, dejar solo las llaves
+            if '} else {' in line:
+                lines[idx] = line.replace('} else {', '}')
+                # Añadir apertura de bloque en nueva línea
+                indent = re.match(r'(\s*)', line).group(1)
+                lines.insert(idx + 1, indent + '{\n')
+                return True
+            elif line.strip() == 'else {':
+                # Eliminar la línea del else {
+                del lines[idx]
+                return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_weak_attribute(file_path, line_number):
+    def transform(line):
+        if '__attribute__((weak))' in line:
+            return line.replace('__attribute__((weak))', '__weak')
+        return None
+    return apply_line_transform(file_path, line_number, transform)
+
+def fix_oom_message(file_path, line_number):
+    def callback(lines, idx):
+        line = lines[idx]
+        # Eliminar mensajes de out of memory innecesarios
+        # Típicamente son pr_err/printk después de malloc fallido
+        if 'pr_err' in line or 'printk' in line or 'pr_warn' in line:
+            # Verificar si el mensaje habla de memoria/allocation/buffer
+            lower = line.lower()
+            if any(word in lower for word in ['allocate', 'alloc', 'buffer', 'memory', 'oom']):
+                del lines[idx]
+                return True
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
 def fix_asm_includes(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_asm_includes ({file_path}:{line_number})")
     mapping = ASM_INCLUDE_MAP
     def transform(line):
         new = line
@@ -479,330 +636,52 @@ def fix_asm_includes(file_path, line_number):
         return new if new != line else None
     return apply_line_transform(file_path, line_number, transform)
 
-def fix_msleep_too_small(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_msleep_too_small ({file_path}:{line_number})")
-    def transform(line):
-        m = MSLEEP_PATTERN.search(line)
-        if not m:
-            return None
-        value = int(m.group(1))
-        if value >= 20:
-            return None
-        us = value * 1000
-        return f"usleep_range({us}, {us + 1000});\n"
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_kmalloc_no_flag(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_kmalloc_no_flag ({file_path}:{line_number})")
-    def transform(line):
-        m = KMALLOC_PATTERN.search(line)
-        if not m:
-            return None
-        return line.replace(m.group(0), f"kmalloc({m.group(1)}, GFP_KERNEL)")
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_memcpy_literal(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_memcpy_literal ({file_path}:{line_number})")
-    def transform(line):
-        m = MEMCPY_LITERAL_PATTERN.search(line)
-        if not m:
-            return None
-        dest, literal, size = m.groups()
-        return f"strscpy({dest.strip()}, \"{literal}\", {size.strip()});\n"
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_of_read_no_check(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_of_read_no_check ({file_path}:{line_number})")
-    def transform(line):
-        if "of_property_read_u32" not in line:
-            return None
-        indent = " " * (len(line) - len(line.lstrip()))
-        stripped = line.strip()
-        new_code = (
-            f"{indent}if ({stripped})\n"
-            f"{indent}    return -EINVAL;\n"
-        )
-        return new_code
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_strncpy(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_strncpy ({file_path}:{line_number})")
-    def transform(line):
-        m = STRNCPY_PATTERN.search(line)
-        if not m:
-            return None
-        dest, src, size = m.groups()
-        return f"strscpy({dest.strip()}, {src.strip()}, {size.strip()});\n"
-    return apply_line_transform(file_path, line_number, transform)
-
-
-def fix_missing_blank_line(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_missing_blank_line ({file_path}:{line_number})")
+def fix_initdata_placement(file_path, line_number):
     def callback(lines, idx):
-        if idx < 0:
-            return False
-        if idx + 1 < len(lines):
-            if lines[idx].strip() != "":
-                lines.insert(idx, "\n")
+        # Checkpatch reporta exactamente la línea con el problema
+        line = lines[idx]
+        if '__initdata' in line and ';' in line:
+            # Patrón 1: static __initdata tipo variable;
+            match = re.match(r'^(\s*)(static\s+)__initdata\s+(.+?)\s+([^;]+);', line)
+            if match:
+                indent, static, tipo, rest = match.groups()
+                lines[idx] = f'{indent}{static}{tipo} {rest} __initdata;\n'
                 return True
-            else:
-                if lines[idx] != "\n":
-                    lines[idx] = "\n"
-                    return True
-                return False
-        else:
-            lines.append("\n")
-            return True
-
-    return apply_lines_callback(file_path, line_number, callback)
-
-def fix_quoted_string_split(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_quoted_string_split ({file_path}:{line_number})")
-    def callback(lines, idx):
-        # original implementation operated on line_number - 2
-        target = idx - 1
-        if target < 0 or target + 1 >= len(lines):
-            return False
-        original = lines[target]
-        clean = original.rstrip()
-        if clean.endswith('"') and not clean.endswith('\\n"'):
-            body = clean[:-1].rstrip() + "\\n"
-            corrected = body + '"'
-            if original.endswith("\n"):
-                corrected += "\n"
-            lines[target] = corrected
-            return True
+            # Patrón 2: static tipo __initdata variable; (tipo puede ser múltiples palabras)
+            match = re.match(r'^(\s*)(static\s+)(.+?)\s+__initdata\s+([^;]+);', line)
+            if match:
+                indent, static, tipo, rest = match.groups()
+                lines[idx] = f'{indent}{static}{tipo} {rest} __initdata;\n'
+                return True
         return False
-
     return apply_lines_callback(file_path, line_number, callback)
 
-
-
-def fix_trailing_whitespace(file_path, line_number):
-    def transform(line):
-        return line.rstrip() + "\n"
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_switch_case_indent(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_switch_case_indent ({file_path}:{line_number})")
+def fix_missing_spdx(file_path, line_number):
     def callback(lines, idx):
-        if idx < 0 or idx >= len(lines):
-            return False
-        stripped = lines[idx].lstrip()
-        if not stripped.startswith("switch"):
-            return False
-        switch_indent = lines[idx][:len(lines[idx]) - len(stripped)]
-        updated = False
-        depth = 0
-        i = idx
-        while i < len(lines):
-            line = lines[i]
-            stripped = line.lstrip()
-            depth += line.count("{")
-            depth -= line.count("}")
-            if i > idx and depth == 0:
-                break
-            if depth == 1 and (stripped.startswith("case ") or stripped.startswith("default")):
-                new_line = switch_indent + stripped
-                if new_line != line:
-                    lines[i] = new_line
-                    updated = True
-            i += 1
-        return updated
-
-    return apply_lines_callback(file_path, line_number, callback)
-
-def fix_indent_tabs(file_path, line_number):
-    def transform(line):
-        stripped = line.lstrip('\t ')
-        indent = line[:len(line) - len(stripped)]
-        col = 0
-        for ch in indent:
-            if ch == "\t":
-                col = (col // 8 + 1) * 8
-            else:
-                col += 1
-        needed_tabs = col // 8
-        new_indent = "\t" * needed_tabs
-        new_line = new_indent + stripped
-        return new_line if new_line != line else None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_initconst(file_path, line_number):
-    def transform(line):
-        if "const" in line and "__initdata" in line:
-            return line.replace("__initdata", "__initconst", 1)
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_prefer_notice(file_path, line_number):
-    def transform(line):
-        if "printk(KERN_NOTICE" in line:
-            return line.replace("printk(KERN_NOTICE ", "pr_notice(", 1)
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_space_after_open_paren(file_path, line_number):
-    # moved to tuple-based rule in fix_constants.py / fix_main.py
-    return False
-
-def fix_space_before_tabs(file_path, line_number):
-    # handled by tuple-based rule in fix_constants.py / fix_main.py
-    return False
-
-def fix_void_return(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_void_return ({file_path}:{line_number})")
-    def transform(line):
-        if line.strip() == "return;":
-            return ""
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_unnecessary_braces(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_unnecessary_braces ({file_path}:{line_number})")
-    def callback(lines, idx):
-        if idx < 1 or idx+1 >= len(lines):
-            return False
-        # Debe ser: '{' en esta línea
-        if lines[idx].strip() != "{":
-            return False
-        # Y la siguiente NO debe ser un bloque grande
-        if idx+2 >= len(lines) or lines[idx+2].strip() != "}":
-            return False
-        # Elimino llaves
-        del lines[idx+2]
-        del lines[idx]
-        return True
-
-    return apply_lines_callback(file_path, line_number, callback)
-
-def fix_block_comment_trailing(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_block_comment_trailing ({file_path}:{line_number})")
-    def callback(lines, idx):
-        if idx < 0 or idx >= len(lines):
-            return False
-        line = lines[idx]
-        if "*/" in line and not line.strip().endswith("*/"):
-            new_line = line.replace("*/", "").rstrip()
-            lines[idx] = new_line
-            lines.insert(idx + 1, " */\n")
-            return True
-        return False
-
-    return apply_lines_callback(file_path, line_number, callback)
-
-def fix_char_array_static_const(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_char_array_static_const ({file_path}:{line_number})")
-    def transform(line):
-        # Caso: char *foo[] = { ... };
-        if CHAR_ARRAY_PATTERN.search(line) and "static" not in line:
-            return line.replace("char", "static const char", 1)
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_bare_unsigned(file_path, line_number):
-    # handled by tuple-based rule in fix_constants.py / fix_main.py
-    return False
-
-def fix_spdx_comment(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_spdx_comment ({file_path}:{line_number})")
-    def transform(line):
-        if line.strip().startswith("// SPDX-"):
-            return "/* " + line.strip()[3:] + " */\n"
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_extern_in_c(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_extern_in_c ({file_path}:{line_number})")
-    def callback(lines, idx):
-        if idx < 0 or idx >= len(lines):
-            return False
-        line = lines[idx]
-        # Detect extern statement
-        if not EXTERN_DECL_PATTERN.match(line):
-            return False
-        # Extract variable name using a safer regex capture
-        m = EXTERN_CAPTURE_PATTERN.match(line)
-        if m:
-            varname = m.group(1)
-            # Search for usage excluding the extern itself
-            for j, l in enumerate(lines):
-                if j != idx and re.search(rf"\b{re.escape(varname)}\b", l):
-                    # Variable is used → don't comment automatically
+        # Solo actuar si es línea 1
+        if idx == 0:
+            # Verificar si ya existe SPDX en las primeras líneas
+            for i in range(min(3, len(lines))):
+                if 'SPDX-License-Identifier' in lines[i]:
+                    # Ya existe, no hacer nada
                     return False
-        # Safe: variable is not used → comment it out
-        lines[idx] = "// " + line
-        return True
-
+            
+            # Añadir SPDX al principio del archivo
+            # Determinar el tipo de comentario según la extensión
+            file_str = str(file_path)
+            if file_str.endswith('.h'):
+                spdx_line = '/* SPDX-License-Identifier: GPL-2.0 */\n'
+            elif file_str.endswith(('.c', '.S')):
+                spdx_line = '// SPDX-License-Identifier: GPL-2.0\n'
+            else:
+                spdx_line = '/* SPDX-License-Identifier: GPL-2.0 */\n'
+            
+            lines.insert(0, spdx_line)
+            return True
+        return False
     return apply_lines_callback(file_path, line_number, callback)
-
-def fix_simple_strtoul(file_path, line_number):
-    # replaced by SIMPLE_STRTOUL tuple rule in fix_constants.py / fix_main.py
-    return False
-
-def fix_simple_strtol(file_path, line_number):
-    # replaced by SIMPLE_STRTOL tuple rule in fix_constants.py / fix_main.py
-    return False
-
-def fix_symbolic_permissions(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_symbolic_permissions ({file_path}:{line_number})")
-    def transform(line):
-        if "S_IRUSR" in line and "S_IWUSR" in line:
-            return SYMBOLIC_PERMS_PATTERN.sub("0600", line)
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_printk_info(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_info ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_INFO" in line:
-            new_line = line.replace("printk(KERN_INFO", "pr_info")
-            new_line = new_line.replace(")", ")")  # mantener estilo
-            return new_line
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_printk_err(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_err ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_ERR" in line:
-            return line.replace("printk(KERN_ERR", "pr_err")
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_printk_warn(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_warn ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_WARNING" in line:
-            return line.replace("printk(KERN_WARNING", "pr_warn")
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_printk_debug(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_printk_debug ({file_path}:{line_number})")
-    def transform(line):
-        if "printk(KERN_DEBUG" in line:
-            return line.replace("printk(KERN_DEBUG", "pr_debug")
-        return None
-    return apply_line_transform(file_path, line_number, transform)
-
-def fix_asm_includes(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_asm_includes ({file_path}:{line_number})")
-    mapping = {
-        "<asm/div64.h>": "<linux/math64.h>",
-        "<asm/atomic.h>": "<linux/atomic.h>",
-        "<asm/byteorder.h>": "<linux/byteorder.h>",
-    }
-    def transform(line):
-        new = line
-        for asm_inc, linux_inc in mapping.items():
-            if asm_inc in new:
-                new = new.replace(asm_inc, linux_inc)
-        return new if new != line else None
-    return apply_line_transform(file_path, line_number, transform)
 
 def fix_msleep_too_small(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_msleep_too_small ({file_path}:{line_number})")
     def transform(line):
         m = MSLEEP_PATTERN.search(line)
         if not m:
@@ -815,7 +694,6 @@ def fix_msleep_too_small(file_path, line_number):
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_kmalloc_no_flag(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_kmalloc_no_flag ({file_path}:{line_number})")
     def transform(line):
         m = KMALLOC_PATTERN.search(line)
         if not m:
@@ -824,7 +702,6 @@ def fix_kmalloc_no_flag(file_path, line_number):
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_memcpy_literal(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_memcpy_literal ({file_path}:{line_number})")
     def transform(line):
         m = MEMCPY_LITERAL_PATTERN.search(line)
         if not m:
@@ -834,7 +711,6 @@ def fix_memcpy_literal(file_path, line_number):
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_of_read_no_check(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_of_read_no_check ({file_path}:{line_number})")
     def transform(line):
         if "of_property_read_u32" not in line:
             return None
@@ -847,8 +723,23 @@ def fix_of_read_no_check(file_path, line_number):
         return new_code
     return apply_line_transform(file_path, line_number, transform)
 
+def fix_strcpy_to_strscpy(file_path, line_number):
+    def transform(line):
+        # Reemplazar strcpy( por strscpy(
+        # Necesitamos añadir el tercer parámetro (tamaño del buffer)
+        # Por ahora, usamos sizeof(dest) como estimación segura
+        if 'strcpy(' in line:
+            # Capturar strcpy(dest, src) para convertir a strscpy(dest, src, sizeof(dest))
+            match = re.search(r'strcpy\s*\(\s*([^,]+),\s*([^)]+)\)', line)
+            if match:
+                dest = match.group(1).strip()
+                src = match.group(2).strip()
+                # Reemplazar con strscpy incluyendo sizeof
+                return line.replace(match.group(0), f'strscpy({dest}, {src}, sizeof({dest}))')
+        return None
+    return apply_line_transform(file_path, line_number, transform)
+
 def fix_strncpy(file_path, line_number):
-    print(f"[DEBUG] Entrando en fix_strncpy ({file_path}:{line_number})")
     def transform(line):
         m = STRNCPY_PATTERN.search(line)
         if not m:
@@ -856,3 +747,4 @@ def fix_strncpy(file_path, line_number):
         dest, src, size = m.groups()
         return f"strscpy({dest.strip()}, {src.strip()}, {size.strip()});\n"
     return apply_line_transform(file_path, line_number, transform)
+

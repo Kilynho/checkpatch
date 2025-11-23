@@ -21,14 +21,18 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
 
     # ...existing code...
 
-    # --- Contadores globales sobre incidencias fijadas ---
+    # --- Contadores globales sobre incidencias fijadas y saltadas ---
     files_with_errors = {f for f, issues in report_data.items() if any(i.get("fixed") for i in issues.get("error", []))}
     files_with_warnings = {f for f, issues in report_data.items() if any(i.get("fixed") for i in issues.get("warning", []))}
+    files_with_errors_skipped = {f for f, issues in report_data.items() if any(not i.get("fixed") for i in issues.get("error", []))}
+    files_with_warnings_skipped = {f for f, issues in report_data.items() if any(not i.get("fixed") for i in issues.get("warning", []))}
     total_files_count = len(files_with_errors | files_with_warnings)
 
-    occ_errors = sum(1 for issues in report_data.values() for i in issues.get("error", []) if i.get("fixed"))
-    occ_warnings = sum(1 for issues in report_data.values() for i in issues.get("warning", []) if i.get("fixed"))
-    total_occ_count = occ_errors + occ_warnings
+    occ_errors_fixed = sum(1 for issues in report_data.values() for i in issues.get("error", []) if i.get("fixed"))
+    occ_warnings_fixed = sum(1 for issues in report_data.values() for i in issues.get("warning", []) if i.get("fixed"))
+    occ_errors_skipped = sum(1 for issues in report_data.values() for i in issues.get("error", []) if not i.get("fixed"))
+    occ_warnings_skipped = sum(1 for issues in report_data.values() for i in issues.get("warning", []) if not i.get("fixed"))
+    total_occ_count = occ_errors_fixed + occ_warnings_fixed
 
     def pct(val, total):
         return f"{(val / total * 100):.1f}%" if total else "0%"
@@ -55,6 +59,8 @@ th { background: #eee; }
 .warnings { color: orange; font-weight: bold; }
 .errors { color: red; font-weight: bold; }
 .total { font-weight: bold; color: #2196F3; }
+h3.errors, h4.errors { color: #d32f2f; background: #ffebee; padding: 10px; border-left: 4px solid #d32f2f; border-radius: 4px; }
+h3.warnings, h4.warnings { color: #f57c00; background: #fff3e0; padding: 10px; border-left: 4px solid #f57c00; border-radius: 4px; }
 details { margin-bottom: 8px; }
 pre { background: #f4f4f4; padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
 .bar { display: inline-block; height: 12px; background: #ddd; border-radius: 3px; }
@@ -62,6 +68,7 @@ pre { background: #f4f4f4; padding: 8px; border-radius: 4px; overflow-x: auto; w
 .bar-errors { background: #e57373; }
 .bar-warnings { background: #ffb74d; }
 .bar-total { background: #2196F3; }
+.skipped { color: #757575; font-weight: bold; }
 th.num, td.num { text-align: center; width: 110px; }
 
 /* Analyzer-style per-file detail styling (from autofix diffs generator) */
@@ -85,37 +92,172 @@ details.file-detail summary:hover { background: #f0f0f0; }
     append(f"<tr><th>Estado</th><th>Ficheros</th><th style='width:{PCT_CELL_WIDTH}px;'>% Ficheros</th>"
            f"<th>Casos</th><th style='width:{PCT_CELL_WIDTH}px;'>% Casos</th></tr>")
 
-    for key, cls, files_set, occ_count in [
-        ("errors","errors", files_with_errors, occ_errors),
-        ("warnings","warnings", files_with_warnings, occ_warnings)
-    ]:
-        f_count = len(files_set)
-        f_pct = pct(f_count, total_files_count)
-        o_pct = pct(occ_count, total_occ_count)
-        f_bar = bar_width(f_count, total_files_count, max_width=PCT_CELL_WIDTH - 50)
-        o_bar = bar_width(occ_count, total_occ_count, max_width=PCT_CELL_WIDTH - 50)
-        append(f"<tr><td class='{cls}'>{key.upper()}</td>"
-               f"<td class='num'>{f_count}</td>"
-               f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
-               f"<span style='flex:none'>{f_pct}</span>"
-               f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{cls}' style='width:{f_bar}px'></div></div></td>"
-               f"<td class='num'>{occ_count}</td>"
-               f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
-               f"<span style='flex:none'>{o_pct}</span>"
-               f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{cls}' style='width:{o_bar}px'></div></div></td></tr>")
+    # Calcular totales antes del loop
+    # Totales por categoría
+    f_count_errors_total = len(files_with_errors | files_with_errors_skipped)
+    o_count_errors_total = occ_errors_fixed + occ_errors_skipped
+    f_count_warnings_total = len(files_with_warnings | files_with_warnings_skipped)
+    o_count_warnings_total = occ_warnings_fixed + occ_warnings_skipped
+    # Totales generales
+    total_files_all = len(files_with_errors | files_with_warnings | files_with_errors_skipped | files_with_warnings_skipped)
+    total_occ_all = o_count_errors_total + o_count_warnings_total
+    
+    # Errores corregidos (% respecto a errores procesados)
+    f_count = len(files_with_errors)
+    o_count = occ_errors_fixed
+    f_pct = pct(f_count, f_count_errors_total)
+    o_pct = pct(o_count, o_count_errors_total)
+    f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
+    o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
+    append(f"<tr><td class='errors'>ERRORES CORREGIDOS</td>"
+           f"<td class='num'>{f_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-errors' style='width:{f_bar}px'></div></div></td>"
+           f"<td class='num'>{o_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-errors' style='width:{o_bar}px'></div></div></td></tr>")
+    
+    # Errores saltados (% respecto a errores procesados)
+    f_count = len(files_with_errors_skipped)
+    o_count = occ_errors_skipped
+    f_pct = pct(f_count, f_count_errors_total)
+    o_pct = pct(o_count, o_count_errors_total)
+    f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
+    o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
+    append(f"<tr><td class='errors'>ERRORES SALTADOS</td>"
+           f"<td class='num'>{f_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-errors' style='width:{f_bar}px'></div></div></td>"
+           f"<td class='num'>{o_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-errors' style='width:{o_bar}px'></div></div></td></tr>")
+    
+    # Errores procesados (subtotal) - 100%
+    f_pct = "100.0%"
+    o_pct = "100.0%"
+    f_bar = PCT_CELL_WIDTH - 50
+    o_bar = PCT_CELL_WIDTH - 50
+    append(f"<tr><td class='errors' style='font-weight:bold'>ERRORES PROCESADOS</td>"
+           f"<td class='num' style='font-weight:bold'>{f_count_errors_total}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-errors' style='width:{f_bar}px'></div></div></td>"
+           f"<td class='num' style='font-weight:bold'>{o_count_errors_total}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-errors' style='width:{o_bar}px'></div></div></td></tr>")
+    
+    # Warnings corregidos (% respecto a warnings procesados)
+    f_count = len(files_with_warnings)
+    o_count = occ_warnings_fixed
+    f_pct = pct(f_count, f_count_warnings_total)
+    o_pct = pct(o_count, o_count_warnings_total)
+    f_bar = bar_width(f_count, f_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
+    o_bar = bar_width(o_count, o_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
+    append(f"<tr><td class='warnings'>WARNINGS CORREGIDOS</td>"
+           f"<td class='num'>{f_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-warnings' style='width:{f_bar}px'></div></div></td>"
+           f"<td class='num'>{o_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-warnings' style='width:{o_bar}px'></div></div></td></tr>")
+    
+    # Warnings saltados (% respecto a warnings procesados)
+    f_count = len(files_with_warnings_skipped)
+    o_count = occ_warnings_skipped
+    f_pct = pct(f_count, f_count_warnings_total)
+    o_pct = pct(o_count, o_count_warnings_total)
+    f_bar = bar_width(f_count, f_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
+    o_bar = bar_width(o_count, o_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
+    append(f"<tr><td class='warnings'>WARNINGS SALTADOS</td>"
+           f"<td class='num'>{f_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-warnings' style='width:{f_bar}px'></div></div></td>"
+           f"<td class='num'>{o_count}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-warnings' style='width:{o_bar}px'></div></div></td></tr>")
+    
+    # Warnings procesados (subtotal) - 100%
+    f_pct = "100.0%"
+    o_pct = "100.0%"
+    f_bar = PCT_CELL_WIDTH - 50
+    o_bar = PCT_CELL_WIDTH - 50
+    append(f"<tr><td class='warnings' style='font-weight:bold'>WARNINGS PROCESADOS</td>"
+           f"<td class='num' style='font-weight:bold'>{f_count_warnings_total}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-warnings' style='width:{f_bar}px'></div></div></td>"
+           f"<td class='num' style='font-weight:bold'>{o_count_warnings_total}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-warnings' style='width:{o_bar}px'></div></div></td></tr>")
 
-    # Fila TOTAL
-    append(f"<tr><td class='total'>TOTAL</td>"
-           f"<td class='num'>{total_files_count}</td>"
+    # Total corregidos (% respecto al total general)
+    f_count_corrected = len(files_with_errors | files_with_warnings)
+    o_count_corrected = occ_errors_fixed + occ_warnings_fixed
+    f_pct = pct(f_count_corrected, total_files_all)
+    o_pct = pct(o_count_corrected, total_occ_all)
+    f_bar = bar_width(f_count_corrected, total_files_all, max_width=PCT_CELL_WIDTH - 50)
+    o_bar = bar_width(o_count_corrected, total_occ_all, max_width=PCT_CELL_WIDTH - 50)
+    append(f"<tr style='background:#e3f2fd'><td class='total' style='color:#1976d2'>TOTAL CORREGIDOS</td>"
+           f"<td class='num'>{f_count_corrected}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
-           f"<span style='flex:none'>100%</span>"
-           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-total' style='width:{PCT_CELL_WIDTH-50}px'></div></div></td>"
-           f"<td class='num'>{total_occ_count}</td>"
+           f"<span style='flex:none'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner' style='background:#42a5f5; width:{f_bar}px'></div></div></td>"
+           f"<td class='num'>{o_count_corrected}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
-           f"<span style='flex:none'>100%</span>"
-           f"<div class='bar' style='flex:1;'><div class='bar-inner bar-total' style='width:{PCT_CELL_WIDTH-50}px'></div></div></td></tr>")
+           f"<span style='flex:none'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner' style='background:#42a5f5; width:{o_bar}px'></div></div></td></tr>")
+    
+    # Total saltados (% respecto al total general)
+    f_count_skipped = len(files_with_errors_skipped | files_with_warnings_skipped)
+    o_count_skipped = occ_errors_skipped + occ_warnings_skipped
+    f_pct = pct(f_count_skipped, total_files_all)
+    o_pct = pct(o_count_skipped, total_occ_all)
+    f_bar = bar_width(f_count_skipped, total_files_all, max_width=PCT_CELL_WIDTH - 50)
+    o_bar = bar_width(o_count_skipped, total_occ_all, max_width=PCT_CELL_WIDTH - 50)
+    append(f"<tr style='background:#e3f2fd'><td class='total' style='color:#1976d2'>TOTAL SALTADOS</td>"
+           f"<td class='num' style='font-weight:bold'>{f_count_skipped}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner' style='background:#bdbdbd; width:{f_bar}px'></div></div></td>"
+           f"<td class='num'>{o_count_skipped}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner' style='background:#42a5f5; width:{o_bar}px'></div></div></td></tr>")
+
+    # Fila TOTAL - 100%
+    f_pct = "100.0%"
+    o_pct = "100.0%"
+    f_bar = PCT_CELL_WIDTH - 50
+    o_bar = PCT_CELL_WIDTH - 50
+    append(f"<tr style='background:#e3f2fd'><td class='total' style='color:#1976d2; font-weight:bold'>TOTAL</td>"
+           f"<td class='num' style='font-weight:bold'>{total_files_all}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{f_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner' style='background:#42a5f5; width:{f_bar}px'></div></div></td>"
+           f"<td class='num' style='font-weight:bold'>{total_occ_all}</td>"
+           f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+           f"<span style='flex:none; font-weight:bold'>{o_pct}</span>"
+           f"<div class='bar' style='flex:1;'><div class='bar-inner' style='background:#42a5f5; width:{f_bar}px'></div></div></td></tr>")
 
     append("</table>")
+    
+    # Nota sobre correcciones indirectas
+    append("<div style='margin: 15px 0; padding: 12px; background: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 4px;'>")
+    append("<strong>ℹ️ Nota:</strong> Algunos errores pueden corregirse indirectamente como efecto secundario de otras transformaciones. ")
+    append("Por ejemplo, al transformar <code>simple_strtoul(str,NULL,0)</code> a <code>kstrtoul(str, NULL, 0)</code>, ")
+    append("también se corrigen automáticamente los errores de espaciado alrededor de las comas. ")
+    append("El contador de 'errores corregidos' refleja las correcciones directas aplicadas.")
+    append("</div>")
 
     # --- Preparar datos por motivo ---
     error_reason_files = defaultdict(list)
@@ -137,7 +279,7 @@ details.file-detail summary:hover { background: #f0f0f0; }
         # total de ficheros únicos que contienen al menos un motivo
         total_files = len(set(f for files in reason_files_dict.values() for f in files))
 
-        append(f"<h3>{section_title}</h3>")
+        append(f"<h3 class='{cls}'>{section_title}</h3>")
         append(f"<table><tr><th>Motivo</th><th>Ficheros</th><th>% Ficheros</th><th>Casos</th><th>% de {typ}s</th></tr>")
 
         for reason, files_list in sorted(reason_files_dict.items(), key=lambda x: -len(x[1])):

@@ -148,6 +148,8 @@ def write_html():
     .correct { color: green; font-weight: bold; }
     .warnings { color: orange; font-weight: bold; }
     .errors { color: red; font-weight: bold; }
+    h3.errors, h4.errors { color: #d32f2f; background: #ffebee; padding: 10px; border-left: 4px solid #d32f2f; border-radius: 4px; }
+    h3.warnings, h4.warnings { color: #f57c00; background: #fff3e0; padding: 10px; border-left: 4px solid #f57c00; border-radius: 4px; }
     .total { font-weight: bold; color: #2196F3; }
     details { margin-bottom: 8px; }
     pre { background: #f4f4f4; padding: 8px; border-radius: 4px; overflow-x: auto; }
