@@ -361,8 +361,13 @@ def fix_prefer_notice(file_path, line_number):
 
 def fix_void_return(file_path, line_number):
     def callback(lines, idx):
-        line = lines[idx]
-        if re.match(r'^\s*return\s*;\s*$', line):
+        # Checkpatch reporta la línea después del return (la llave de cierre)
+        # Buscar el return; en la línea anterior
+        if idx > 0 and re.match(r'^\s*return\s*;\s*$', lines[idx - 1]):
+            del lines[idx - 1]
+            return True
+        # Por si acaso, también verificar línea actual
+        if re.match(r'^\s*return\s*;\s*$', lines[idx]):
             del lines[idx]
             return True
         return False
@@ -446,13 +451,21 @@ def fix_symbolic_permissions(file_path, line_number):
 def fix_printk_info(file_path, line_number):
     def callback(lines, idx):
         line = lines[idx]
+        # Caso 1: Todo en una línea
         if "printk(KERN_INFO " in line and '"' in line:
             lines[idx] = line.replace("printk(KERN_INFO ", "pr_info(", 1)
             return True
+        # Caso 2: Multilínea - KERN_INFO en línea anterior
         if idx > 0 and "printk(KERN_INFO" in lines[idx - 1] and '"' in line:
             indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
             lines[idx] = indent + "pr_info(" + line.strip()
             del lines[idx - 1]
+            return True
+        # Caso 3: Formato multilínea - printk(KERN_INFO en línea actual, mensaje en siguiente
+        if "printk(KERN_INFO" in line and '"' not in line and idx + 1 < len(lines) and '"' in lines[idx + 1]:
+            indent = re.match(r'(\s*)', line).group(1)
+            lines[idx] = indent + "pr_info(" + lines[idx + 1].strip()
+            del lines[idx + 1]
             return True
         return False
     return apply_lines_callback(file_path, line_number, callback)
@@ -505,13 +518,21 @@ def fix_printk_debug(file_path, line_number):
 def fix_printk_emerg(file_path, line_number):
     def callback(lines, idx):
         line = lines[idx]
+        # Caso 1: Todo en una línea
         if "printk(KERN_EMERG " in line and '"' in line:
             lines[idx] = line.replace("printk(KERN_EMERG ", "pr_emerg(", 1)
             return True
+        # Caso 2: Multilínea - KERN_EMERG en línea anterior
         if idx > 0 and "printk(KERN_EMERG" in lines[idx - 1] and '"' in line:
             indent = re.match(r'(\s*)', lines[idx - 1]).group(1)
             lines[idx] = indent + "pr_emerg(" + line.strip()
             del lines[idx - 1]
+            return True
+        # Caso 3: Formato multilínea - printk(KERN_EMERG en línea actual, mensaje en siguiente
+        if "printk(KERN_EMERG" in line and '"' not in line and idx + 1 < len(lines) and '"' in lines[idx + 1]:
+            indent = re.match(r'(\s*)', line).group(1)
+            lines[idx] = indent + "pr_emerg(" + lines[idx + 1].strip()
+            del lines[idx + 1]
             return True
         return False
     return apply_lines_callback(file_path, line_number, callback)
@@ -567,23 +588,32 @@ def fix_jiffies_comparison(file_path, line_number):
 def fix_func_name_in_string(file_path, line_number):
     def transform(line):
         # Buscar nombres de función en strings que deberían ser __func__
-        # Patrón común: "function_name:" o "function_name " o "function_name="
-        # Checkpatch ya nos dice cuál es el nombre, así que buscamos cualquier identificador entre comillas
-        match = re.search(r'"([a-zA-Z_][a-zA-Z0-9_]+)[\s:=]', line)
-        if match:
-            func_name = match.group(1)
-            # Reemplazar el nombre hardcoded por %s y añadir , __func__
-            # Buscar el string completo para insertar %s y __func__
-            if f'"{func_name}' in line:
-                # Reemplazar "func_name" por "%s" y añadir __func__ después del string
-                new_line = line.replace(f'"{func_name}', '"%s')
-                # Encontrar dónde termina el string para insertar __func__
-                # Buscar el final del string literal (comillas de cierre antes del paréntesis)
-                if '")' in new_line or '");' in new_line:
-                    new_line = new_line.replace('")', '", __func__)')
-                    new_line = new_line.replace('");', '", __func__);')
-                return new_line
-        return None
+        # Patrón común: "function_name:" o "function_name " o "function_name("
+        # El warning de checkpatch dice específicamente el nombre de la función
+        
+        # Buscar strings con nombres de función seguidos de : o espacio o (
+        match = re.search(r'"([a-zA-Z_][a-zA-Z0-9_]+)\s*[:(\s]', line)
+        if not match:
+            return None
+            
+        func_name = match.group(1)
+        
+        # Reemplazar "func_name: por "%s: y añadir __func__
+        if f'"{func_name}:' in line:
+            new_line = line.replace(f'"{func_name}:', '"%s:')
+        elif f'"{func_name} ' in line:
+            new_line = line.replace(f'"{func_name} ', '"%s ')
+        elif f'"{func_name}(' in line:
+            new_line = line.replace(f'"{func_name}(', '"%s(')
+        else:
+            return None
+        
+        # Ahora insertar __func__ como primer argumento después del string de formato
+        # Buscar el patrón: "string", otros_args)
+        # y cambiarlo a: "string", __func__, otros_args)
+        new_line = re.sub(r'("[^"]*")\s*,\s*', r'\1, __func__, ', new_line, count=1)
+        
+        return new_line
     return apply_line_transform(file_path, line_number, transform)
 
 def fix_else_after_return(file_path, line_number):
@@ -747,4 +777,81 @@ def fix_strncpy(file_path, line_number):
         dest, src, size = m.groups()
         return f"strscpy({dest.strip()}, {src.strip()}, {size.strip()});\n"
     return apply_line_transform(file_path, line_number, transform)
+
+def fix_logging_continuation(file_path, line_number):
+    """Fix: Avoid logging continuation uses where feasible
+    Reemplaza printk(KERN_CONT ...) por pr_cont(...)
+    """
+    def transform(line):
+        if 'KERN_CONT' in line:
+            # Reemplazar printk(KERN_CONT con pr_cont(
+            return re.sub(r'printk\s*\(\s*KERN_CONT\s*', 'pr_cont(', line)
+        return None
+    return apply_line_transform(file_path, line_number, transform)
+
+def fix_spaces_at_start_of_line(file_path, line_number):
+    """Fix: please, no spaces at the start of a line
+    Elimina espacios al inicio de líneas vacías
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        
+        # Si la línea solo tiene espacios/tabs seguidos de newline, limpiarla
+        if line.strip() == '' and line != '\n':
+            lines[idx] = '\n'
+            return True
+            
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_filename_in_file(file_path, line_number):
+    """Fix: It's generally not useful to have the filename in the file
+    Elimina comentarios que contienen el nombre del archivo
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        
+        # Extraer el path relativo del archivo desde el directorio del kernel
+        # Por ejemplo: /home/user/kernel/linux/init/main.c -> init/main.c
+        import os
+        path_str = str(file_path)
+        
+        # Buscar el patrón linux/subdirectorio/archivo o subdirectorio/archivo
+        # Intentar extraer subdirectorio/archivo.c del path completo
+        if '/init/' in path_str:
+            subdir = 'init'
+        elif '/kernel/' in path_str:
+            subdir = 'kernel'
+        elif '/mm/' in path_str:
+            subdir = 'mm'
+        elif '/fs/' in path_str:
+            subdir = 'fs'
+        elif '/drivers/' in path_str:
+            subdir = 'drivers'
+        else:
+            # Intentar extraer de forma genérica: buscar el penúltimo directorio
+            parts = path_str.split('/')
+            if len(parts) >= 2:
+                subdir = parts[-2]
+            else:
+                return False
+        
+        filename = os.path.basename(path_str)
+        
+        # Buscar comentarios tipo: " * linux/init/main.c" o " * init/main.c"
+        # El patrón es: " * [linux/]subdir/filename"
+        pattern = rf'^\s*\*\s+(linux/)?{re.escape(subdir)}/{re.escape(filename)}\s*$'
+        if re.search(pattern, line):
+            # Eliminar esta línea
+            del lines[idx]
+            return True
+            
+        return False
+    return apply_lines_callback(file_path, line_number, callback)
 

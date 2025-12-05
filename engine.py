@@ -65,6 +65,9 @@ AUTO_FIX_RULES = {
     "Prefer using strscpy instead of strncpy": fix_strncpy,
     "of_property_read without check": fix_of_read_no_check,
     "switch and case should be at the same indent": fix_switch_case_indent,
+    "Avoid logging continuation uses where feasible": fix_logging_continuation,
+    "It's generally not useful to have the filename in the file": fix_filename_in_file,
+    "please, no spaces at the start of a line": fix_spaces_at_start_of_line,
 }
 
 def apply_fixes(file_path, issues):
