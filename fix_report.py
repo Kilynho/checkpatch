@@ -8,6 +8,7 @@ import html as html_module
 from collections import defaultdict
 import datetime
 import subprocess
+from checkpatch_common import COMMON_CSS, percentage, bar_width
 
 # --- Función para mostrar rutas relativas ---
 def display_fp(fp):
@@ -34,12 +35,6 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     occ_warnings_skipped = sum(1 for issues in report_data.values() for i in issues.get("warning", []) if not i.get("fixed"))
     total_occ_count = occ_errors_fixed + occ_warnings_fixed
 
-    def pct(val, total):
-        return f"{(val / total * 100):.1f}%" if total else "0%"
-
-    def bar_width(val, total, max_width=200):
-        return int(val / total * max_width) if total else 0
-
     PCT_CELL_WIDTH = 220
 
     html_out = []
@@ -49,40 +44,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     # --- Header y CSS ---
     append("<!doctype html><html><head><meta charset='utf-8'>")
     append("<style>")
-    append("""
-body { font-family: Arial, Helvetica, sans-serif; padding: 20px; }
-h1 { display:flex; justify-content:space-between; align-items:center; }
-table { border-collapse: collapse; margin-bottom: 20px; width: 100%; }
-th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; width: 100%; }
-th { background: #eee; }
-.correct { color: green; font-weight: bold; }
-.warnings { color: orange; font-weight: bold; }
-.errors { color: red; font-weight: bold; }
-.total { font-weight: bold; color: #2196F3; }
-h3.errors, h4.errors { color: #d32f2f; background: #ffebee; padding: 10px; border-left: 4px solid #d32f2f; border-radius: 4px; }
-h3.warnings, h4.warnings { color: #f57c00; background: #fff3e0; padding: 10px; border-left: 4px solid #f57c00; border-radius: 4px; }
-details { margin-bottom: 8px; }
-pre { background: #f4f4f4; padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
-.bar { display: inline-block; height: 12px; background: #ddd; border-radius: 3px; }
-.bar-inner { height: 100%; border-radius: 3px; }
-.bar-errors { background: #e57373; }
-.bar-warnings { background: #ffb74d; }
-.bar-total { background: #2196F3; }
-.skipped { color: #757575; font-weight: bold; }
-th.num, td.num { text-align: center; width: 110px; }
-
-/* Analyzer-style per-file detail styling (from autofix diffs generator) */
-details.file-detail { margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
-details.file-detail summary { cursor: pointer; padding: 12px; background: #f9f9f9; font-weight: bold; color: #2196F3; user-select: none; display: flex; justify-content: space-between; align-items: center; }
-details.file-detail summary:hover { background: #f0f0f0; }
-.detail-content { padding: 12px; background: white; }
-.stats { display: flex; gap: 20px; align-items: center; margin-left: auto; }
-.stat-item { display: flex; align-items: center; gap: 4px; }
-.added { color: #4CAF50; font-weight: bold; }
-.removed { color: #f44336; font-weight: bold; }
-.fixed-badge { background: #4CAF50; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: normal; }
-.diff-pre { background:#f5f5f5; padding:12px; border-radius:4px; overflow-x:auto; font-size:11px; line-height:1.4; border-left:3px solid #2196F3; }
-""")
+    append(COMMON_CSS)
     append("</style></head><body>")
     append(f"<h1>Informe Checkpatch Autofix <span style='font-weight:normal'>{timestamp}</span></h1>")
 
@@ -105,8 +67,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
     # Errores corregidos (% respecto a errores procesados)
     f_count = len(files_with_errors)
     o_count = occ_errors_fixed
-    f_pct = pct(f_count, f_count_errors_total)
-    o_pct = pct(o_count, o_count_errors_total)
+    f_pct = percentage(f_count, f_count_errors_total)
+    o_pct = percentage(o_count, o_count_errors_total)
     f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     append(f"<tr><td class='errors'>ERRORES CORREGIDOS</td>"
@@ -122,8 +84,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
     # Errores saltados (% respecto a errores procesados)
     f_count = len(files_with_errors_skipped)
     o_count = occ_errors_skipped
-    f_pct = pct(f_count, f_count_errors_total)
-    o_pct = pct(o_count, o_count_errors_total)
+    f_pct = percentage(f_count, f_count_errors_total)
+    o_pct = percentage(o_count, o_count_errors_total)
     f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     append(f"<tr><td class='errors'>ERRORES SALTADOS</td>"
@@ -154,8 +116,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
     # Warnings corregidos (% respecto a warnings procesados)
     f_count = len(files_with_warnings)
     o_count = occ_warnings_fixed
-    f_pct = pct(f_count, f_count_warnings_total)
-    o_pct = pct(o_count, o_count_warnings_total)
+    f_pct = percentage(f_count, f_count_warnings_total)
+    o_pct = percentage(o_count, o_count_warnings_total)
     f_bar = bar_width(f_count, f_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
     append(f"<tr><td class='warnings'>WARNINGS CORREGIDOS</td>"
@@ -171,8 +133,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
     # Warnings saltados (% respecto a warnings procesados)
     f_count = len(files_with_warnings_skipped)
     o_count = occ_warnings_skipped
-    f_pct = pct(f_count, f_count_warnings_total)
-    o_pct = pct(o_count, o_count_warnings_total)
+    f_pct = percentage(f_count, f_count_warnings_total)
+    o_pct = percentage(o_count, o_count_warnings_total)
     f_bar = bar_width(f_count, f_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
     append(f"<tr><td class='warnings'>WARNINGS SALTADOS</td>"
@@ -203,8 +165,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
     # Total corregidos (% respecto al total general)
     f_count_corrected = len(files_with_errors | files_with_warnings)
     o_count_corrected = occ_errors_fixed + occ_warnings_fixed
-    f_pct = pct(f_count_corrected, total_files_all)
-    o_pct = pct(o_count_corrected, total_occ_all)
+    f_pct = percentage(f_count_corrected, total_files_all)
+    o_pct = percentage(o_count_corrected, total_occ_all)
     f_bar = bar_width(f_count_corrected, total_files_all, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count_corrected, total_occ_all, max_width=PCT_CELL_WIDTH - 50)
     append(f"<tr style='background:#e3f2fd'><td class='total' style='color:#1976d2'>TOTAL CORREGIDOS</td>"
@@ -220,8 +182,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
     # Total saltados (% respecto al total general)
     f_count_skipped = len(files_with_errors_skipped | files_with_warnings_skipped)
     o_count_skipped = occ_errors_skipped + occ_warnings_skipped
-    f_pct = pct(f_count_skipped, total_files_all)
-    o_pct = pct(o_count_skipped, total_occ_all)
+    f_pct = percentage(f_count_skipped, total_files_all)
+    o_pct = percentage(o_count_skipped, total_occ_all)
     f_bar = bar_width(f_count_skipped, total_files_all, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count_skipped, total_occ_all, max_width=PCT_CELL_WIDTH - 50)
     append(f"<tr style='background:#e3f2fd'><td class='total' style='color:#1976d2'>TOTAL SALTADOS</td>"
@@ -285,8 +247,8 @@ details.file-detail summary:hover { background: #f0f0f0; }
         for reason, files_list in sorted(reason_files_dict.items(), key=lambda x: -len(x[1])):
             count_cases = len(files_list)
             count_files = len(set(files_list))
-            pct_files = pct(count_files, total_files)
-            pct_cases = pct(count_cases, total_cases)
+            pct_files = percentage(count_files, total_files)
+            pct_cases = percentage(count_cases, total_cases)
             bar_files_len = bar_width(count_files, total_files, max_width=PCT_CELL_WIDTH-50)
             bar_cases_len = bar_width(count_cases, total_cases, max_width=PCT_CELL_WIDTH-50)
             reason_text = reason
