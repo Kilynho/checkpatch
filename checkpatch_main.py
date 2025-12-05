@@ -16,14 +16,19 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-# Módulos de análisis
-from analyze_core import analyze_file, get_analysis_summary, reset_analysis
-from analyze_report import generate_analyzer_html
+# Módulos unificados
+from fix_main import (
+    apply_fixes,
+    analyze_file, 
+    get_analysis_summary, 
+    reset_analysis
+)
+from fix_report import (
+    generate_html_report, 
+    summarize_results,
+    generate_analyzer_html
+)
 from checkpatch_common import find_source_files
-
-# Módulos de autofix
-from fix_main import apply_fixes
-from fix_report import generate_html_report, summarize_results
 
 
 def analyze_mode(args):

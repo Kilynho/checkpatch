@@ -5,7 +5,24 @@ Funciones y constantes comunes para analyzer y autofix
 
 import subprocess
 import os
+import re
 from pathlib import Path
+
+# ============================
+# Mapeos y configuración
+# ============================
+FUNCTIONALITY_MAP = {
+    "drivers": "Drivers",
+    "fs": "Filesystems",
+    "net": "Networking",
+    "kernel": "Core Kernel",
+    "arch": "Architecture",
+    "lib": "Libraries",
+    "include": "Headers",
+}
+
+EXTENSIONS = [".c", ".h"]
+MAX_WORKERS = 4
 
 # ============================
 # CSS común para HTML
