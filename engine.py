@@ -1,12 +1,12 @@
-# fix_main.py
+# engine.py
 """
 Módulo principal para aplicar fixes
 """
 
-from fixes_core import *
-from fix_utils import *
-from fix_report import *
-from fix_constants import (
+from core import *
+from utils import *
+from report import *
+from constants import (
     SPACE_AFTER_COMMA,
     SPACE_BEFORE_COMMA,
     SPACE_BEFORE_PAREN,
@@ -130,7 +130,7 @@ def apply_fixes(file_path, issues):
 
 from collections import defaultdict, Counter
 from pathlib import Path
-from checkpatch_common import run_checkpatch, FUNCTIONALITY_MAP
+from common import run_checkpatch, FUNCTIONALITY_MAP
 
 # Variables globales para el análisis
 summary = defaultdict(lambda: {"correct": [], "warnings": [], "errors": []})

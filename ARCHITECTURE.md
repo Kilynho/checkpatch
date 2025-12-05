@@ -4,7 +4,7 @@ Sistema unificado para análisis y corrección automática de warnings/errores d
 
 ## Estructura de Módulos
 
-### checkpatch_main.py (300 líneas) ✨ Entry Point
+### main.py (300 líneas) ✨ Entry Point
 **Punto de entrada único con dos modos de operación:**
 - `--analyze`: Análisis paralelo de archivos con checkpatch.pl
 - `--fix`: Aplicación automática de correcciones
@@ -17,13 +17,13 @@ Sistema unificado para análisis y corrección automática de warnings/errores d
 
 **Uso:**
 ```bash
-./checkpatch_main.py --analyze --source-dir linux/init
-./checkpatch_main.py --fix --json json/checkpatch.json
+./main.py --analyze --source-dir linux/init
+./main.py --fix --json json/checkpatch.json
 ```
 
 ---
 
-### checkpatch_common.py (147 líneas) 🔧 Shared Core
+### common.py (147 líneas) 🔧 Shared Core
 **Funciones y constantes compartidas entre analyzer y autofix.**
 
 **Contenido:**
@@ -38,11 +38,11 @@ Sistema unificado para análisis y corrección automática de warnings/errores d
 
 ---
 
-### fix_main.py (209 líneas) ⚙️ Core Logic
+### engine.py (209 líneas) ⚙️ Core Logic
 **Lógica principal de análisis y corrección.**
 
 #### Sección Autofix:
-- `AUTO_FIX_RULES`: Mapeo de warnings/errores a funciones fix
+- `AUTO_FIX_RULES`: Mapeo de warnings/errores a funciones fix (en engine.py)
 - `apply_fixes()`: Aplica correcciones y retorna resultados estructurados
 
 **Reglas soportadas (40+):**
@@ -65,7 +65,7 @@ Sistema unificado para análisis y corrección automática de warnings/errores d
 
 ---
 
-### fix_report.py (582 líneas) 📊 HTML Reports
+### report.py (582 líneas) 📊 HTML Reports
 **Generación de reportes HTML para analyzer y autofix.**
 
 #### Sección Autofix:
@@ -91,7 +91,7 @@ Sistema unificado para análisis y corrección automática de warnings/errores d
 
 ---
 
-### fixes_core.py (750 líneas) 🔨 Fix Implementations
+### core.py (750 líneas) 🔨 Fix Implementations
 **Implementaciones de todas las funciones de corrección.**
 
 **Funciones destacadas:**
@@ -117,7 +117,7 @@ def fix_something(file_path, line_number):
 
 ---
 
-### fix_utils.py (83 líneas) 🛠️ Utilities
+### utils.py (83 líneas) 🛠️ Utilities
 **Funciones auxiliares para transformaciones de código.**
 
 - `backup_read()`: Crea backup (.bak) y lee archivo
@@ -127,7 +127,7 @@ def fix_something(file_path, line_number):
 
 ---
 
-### fix_constants.py (54 líneas) 📝 Constants
+### constants.py (54 líneas) 📝 Constants
 **Constantes para transformaciones comunes (tuplas pattern/replacement).**
 
 Ejemplos:
@@ -137,7 +137,7 @@ Ejemplos:
 
 ---
 
-### test_fixes.py (201 líneas) ✅ Integration Tests
+### test.py (201 líneas) ✅ Integration Tests
 **Suite de tests con unittest para VS Code.**
 
 **Tests:**
@@ -148,7 +148,7 @@ Ejemplos:
 
 **Uso:**
 ```bash
-./test_fixes.py  # Ejecuta suite completa
+./test.py  # Ejecuta suite completa
 ```
 
 ---
@@ -157,7 +157,7 @@ Ejemplos:
 
 ### 1. Análisis (--analyze)
 ```
-checkpatch_main.py
+main.py
   ↓
 find_source_files() → [archivos .c/.h]
   ↓
@@ -172,7 +172,7 @@ json.dump() → json/checkpatch.json
 
 ### 2. Autofix (--fix)
 ```
-checkpatch_main.py
+main.py
   ↓
 json.load() → issues per file
   ↓
@@ -186,8 +186,8 @@ summarize_results() → console output
 ### 3. Script ./run
 ```bash
 #!/bin/bash
-./checkpatch_main.py --analyze --source-dir linux/init
-./checkpatch_main.py --fix --json json/checkpatch.json
+./main.py --analyze --source-dir linux/init
+./main.py --fix --json json/checkpatch.json
 ```
 
 ---
@@ -209,18 +209,16 @@ summarize_results() → console output
 
 ## Mejoras vs Sistema Original
 
-### Antes (3 scripts separados):
-- ❌ `checkpatch_analyzer.py` (180 líneas)
-- ❌ `checkpatch_autofix.py` (250 líneas)
-- ❌ CSS duplicado en cada script
-- ❌ Funciones duplicadas (run_checkpatch, etc.)
+### Antes:
+- ❌ Nombres con prefijos: `checkpatch_`, `fix_`, `fixes_`, `test_`
+- ❌ Módulos con guiones bajos: `checkpatch_common.py`, `fix_main.py`
+- ❌ Nombres largos y redundantes
 
-### Ahora (sistema unificado):
-- ✅ `checkpatch_main.py` único entry point
-- ✅ `checkpatch_common.py` con código compartido
-- ✅ `fix_main.py` y `fix_report.py` con lógica unificada
-- ✅ Sin duplicación de código
-- ✅ -632 líneas de código total (904 → 272 netas)
+### Ahora:
+- ✅ Nombres simples y claros: `main.py`, `engine.py`, `core.py`
+- ✅ Sin prefijos ni guiones bajos innecesarios
+- ✅ Estructura limpia: `common.py`, `report.py`, `utils.py`, `constants.py`, `test.py`
+- ✅ Más fácil de recordar e importar
 
 ---
 
@@ -228,7 +226,7 @@ summarize_results() → console output
 
 Para añadir nuevo fix:
 
-1. Implementar función en `fixes_core.py`:
+1. Implementar función en `core.py`:
 ```python
 def fix_new_issue(file_path, line_number):
     """Fix description"""
@@ -236,7 +234,7 @@ def fix_new_issue(file_path, line_number):
     return True
 ```
 
-2. Añadir regla a `AUTO_FIX_RULES` en `fix_main.py`:
+2. Añadir regla a `AUTO_FIX_RULES` en `engine.py`:
 ```python
 AUTO_FIX_RULES = {
     ...
@@ -244,7 +242,7 @@ AUTO_FIX_RULES = {
 }
 ```
 
-3. Probar con `./test_fixes.py`
+3. Probar con `./test.py`
 
 ---
 

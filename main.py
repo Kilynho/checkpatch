@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-checkpatch_main.py - Punto de entrada unificado
+main.py - Punto de entrada unificado
 
 Modos de operación:
   --analyze: Analiza archivos con checkpatch.pl y genera reporte HTML
@@ -17,18 +17,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
 # Módulos unificados
-from fix_main import (
+from engine import (
     apply_fixes,
     analyze_file, 
     get_analysis_summary, 
     reset_analysis
 )
-from fix_report import (
+from report import (
     generate_html_report, 
     summarize_results,
     generate_analyzer_html
 )
-from checkpatch_common import find_source_files
+from common import find_source_files
 
 
 def analyze_mode(args):

@@ -1,4 +1,4 @@
-# checkpatch_common.py
+# common.py
 """
 Funciones y constantes comunes para analyzer y autofix
 """

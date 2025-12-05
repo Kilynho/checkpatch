@@ -1,12 +1,12 @@
-# fixes_core.py
+# core.py
 """
 Funciones de autofix complejas
-Las funciones simples de reemplazo de patrones están definidas en fix_main.py como tuplas
+Las funciones simples de reemplazo de patrones están definidas en engine.py como tuplas
 """
 
 import re
-from fix_utils import apply_line_transform, apply_lines_callback
-from fix_constants import (
+from utils import apply_line_transform, apply_lines_callback
+from constants import (
     ASSIGNMENT_IN_IF_PATTERN,
     COMPOUND_ASSIGN_PATTERN,
     LHS_PATTERN,

@@ -1,4 +1,4 @@
-# fix_report.py
+# report.py
 """
 Funciones para generación de reportes HTML
 """
@@ -8,7 +8,7 @@ import html as html_module
 from collections import defaultdict
 import datetime
 import subprocess
-from checkpatch_common import COMMON_CSS, percentage, bar_width
+from common import COMMON_CSS, percentage, bar_width
 
 # --- Función para mostrar rutas relativas ---
 def display_fp(fp):
