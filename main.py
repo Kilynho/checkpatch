@@ -28,7 +28,7 @@ from report import (
     summarize_results,
     generate_analyzer_html
 )
-from common import find_source_files
+from utils import find_source_files
 
 
 def analyze_mode(args):

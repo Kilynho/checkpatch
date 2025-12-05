@@ -8,7 +8,7 @@ import html as html_module
 from collections import defaultdict
 import datetime
 import subprocess
-from common import COMMON_CSS, percentage, bar_width
+from utils import COMMON_CSS, percentage, bar_width
 
 # --- Función para mostrar rutas relativas ---
 def display_fp(fp):

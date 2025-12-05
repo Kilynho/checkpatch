@@ -136,7 +136,7 @@ def apply_fixes(file_path, issues):
 
 from collections import defaultdict, Counter
 from pathlib import Path
-from common import run_checkpatch, FUNCTIONALITY_MAP
+from utils import run_checkpatch, FUNCTIONALITY_MAP
 
 # Variables globales para el análisis
 summary = defaultdict(lambda: {"correct": [], "warnings": [], "errors": []})
