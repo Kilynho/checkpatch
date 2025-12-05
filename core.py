@@ -417,11 +417,24 @@ def fix_block_comment_trailing(file_path, line_number):
 
 def fix_char_array_static_const(file_path, line_number):
     def transform(line):
-        match = CHAR_ARRAY_PATTERN.search(line)
-        if match and "static" not in line:
-            return line.replace("char", "static const char", 1)
-        elif "static char" in line and "const" not in line:
-            return line.replace("static char", "static const char", 1)
+        # Patrón: static char *nombre[] o static char **nombre o char *nombre[]
+        # Debe convertirse a: static const char * const nombre[]
+        
+        # Caso 1: static char *nombre[] o static char **nombre
+        match = re.search(r'(static\s+)char\s+(\*+\w+\[\])', line)
+        if match:
+            return line.replace(match.group(0), f'{match.group(1)}const char * const {match.group(2)[1:]}', 1)
+        
+        # Caso 2: char *nombre[] sin static (agregar static const)
+        match = re.search(r'(^|\s)char\s+(\*+\w+\[\])', line)
+        if match and 'static' not in line:
+            return line.replace(match.group(0), f'{match.group(1)}static const char * const {match.group(2)[1:]}', 1)
+        
+        # Caso 3: ya está static char pero le falta const al final del *
+        # static char *nombre[] → static const char * const nombre[]
+        if re.search(r'static\s+char\s+\*', line) and 'const char' not in line:
+            return line.replace('static char *', 'static const char * const ', 1)
+        
         return None
     return apply_line_transform(file_path, line_number, transform)
 
@@ -598,6 +611,10 @@ def fix_func_name_in_string(file_path, line_number):
             
         func_name = match.group(1)
         
+        # Solo procesar si está en una llamada a función de logging
+        if not any(log_func in line for log_func in ['pr_info', 'pr_warn', 'pr_err', 'pr_debug', 'pr_emerg', 'pr_crit', 'pr_alert', 'pr_notice', 'printk', 'dev_', 'netdev_']):
+            return None
+        
         # Reemplazar "func_name: por "%s: y añadir __func__
         if f'"{func_name}:' in line:
             new_line = line.replace(f'"{func_name}:', '"%s:')
@@ -608,10 +625,15 @@ def fix_func_name_in_string(file_path, line_number):
         else:
             return None
         
-        # Ahora insertar __func__ como primer argumento después del string de formato
-        # Buscar el patrón: "string", otros_args)
-        # y cambiarlo a: "string", __func__, otros_args)
-        new_line = re.sub(r'("[^"]*")\s*,\s*', r'\1, __func__, ', new_line, count=1)
+        # Insertar __func__ como argumento
+        # Caso 1: "string", otros_args) → "string", __func__, otros_args)
+        if re.search(r'("[^"]*")\s*,\s*', new_line):
+            new_line = re.sub(r'("[^"]*")\s*,\s*', r'\1, __func__, ', new_line, count=1)
+        # Caso 2: "string") sin otros args → "string", __func__)
+        elif re.search(r'("[^"]*")\s*\)', new_line):
+            new_line = re.sub(r'("[^"]*")\s*\)', r'\1, __func__)', new_line, count=1)
+        else:
+            return None
         
         return new_line
     return apply_line_transform(file_path, line_number, transform)
@@ -672,16 +694,18 @@ def fix_initdata_placement(file_path, line_number):
         line = lines[idx]
         if '__initdata' in line and ';' in line:
             # Patrón 1: static __initdata tipo variable;
-            match = re.match(r'^(\s*)(static\s+)__initdata\s+(.+?)\s+([^;]+);', line)
+            match = re.match(r'^(\s*)(static\s+)__initdata\s+(.+?)\s+([^;=]+)(.*);', line)
             if match:
-                indent, static, tipo, rest = match.groups()
-                lines[idx] = f'{indent}{static}{tipo} {rest} __initdata;\n'
+                indent, static, tipo, varname, rest = match.groups()
+                rest = rest if rest.startswith(' ') else (' ' + rest if rest else '')
+                lines[idx] = f'{indent}{static}{tipo} {varname.strip()} __initdata{rest};\n'
                 return True
-            # Patrón 2: static tipo __initdata variable; (tipo puede ser múltiples palabras)
-            match = re.match(r'^(\s*)(static\s+)(.+?)\s+__initdata\s+([^;]+);', line)
+            # Patrón 2: static tipo __initdata variable = valor;
+            match = re.match(r'^(\s*)(static\s+)(.+?)\s+__initdata\s+([^;=]+)(.*);', line)
             if match:
-                indent, static, tipo, rest = match.groups()
-                lines[idx] = f'{indent}{static}{tipo} {rest} __initdata;\n'
+                indent, static, tipo, varname, rest = match.groups()
+                rest = rest if rest.startswith(' ') else (' ' + rest if rest else '')
+                lines[idx] = f'{indent}{static}{tipo} {varname.strip()} __initdata{rest};\n'
                 return True
         return False
     return apply_lines_callback(file_path, line_number, callback)

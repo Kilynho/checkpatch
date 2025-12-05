@@ -36,7 +36,8 @@ AUTO_FIX_RULES = {
     "void function return statements are not generally useful": fix_void_return,
     "braces {} are not necessary for single statement blocks": fix_unnecessary_braces,
     "Block comments use a trailing */ on a separate line": fix_block_comment_trailing,
-    "char * array declaration might be better as static const": fix_char_array_static_const,
+    # TODO: PROBLEMATIC - Generates invalid code (const static const)
+    # "char * array declaration might be better as static const": fix_char_array_static_const,
     "Prefer 'unsigned int' to bare use of 'unsigned'": BARE_UNSIGNED,
     "Improper SPDX comment style for '/home/kilynho/src/kernel/linux/init/initramfs_internal.h', please use '/*' instead": fix_spdx_comment,
     "externs should be avoided in .c files": fix_extern_in_c,
@@ -49,9 +50,11 @@ AUTO_FIX_RULES = {
     "Prefer [subsystem eg: netdev]_warn([subsystem]dev, ... then dev_warn(dev, ... then pr_warn(...  to printk(KERN_WARNING ...": fix_printk_warn,
     "Prefer [subsystem eg: netdev]_dbg([subsystem]dev, ... then dev_dbg(dev, ... then pr_debug(...  to printk(KERN_DEBUG ...": fix_printk_debug,
     "Prefer [subsystem eg: netdev]_emerg([subsystem]dev, ... then dev_emerg(dev, ... then pr_emerg(...  to printk(KERN_EMERG ...": fix_printk_emerg,
-    "printk() should include KERN_<LEVEL> facility level": fix_printk_kern_level,
+    # TODO: PROBLEMATIC - Adds KERN_CONT instead of correct level (KERN_INFO, KERN_ERR, etc)
+    # "printk() should include KERN_<LEVEL> facility level": fix_printk_kern_level,
     "Comparing jiffies is almost always wrong; prefer time_after, time_before and friends": fix_jiffies_comparison,
-    "Prefer using": fix_func_name_in_string,  # Matches "Prefer using '"%s...", __func__'"
+    # TODO: PROBLEMATIC - Replaces strings incorrectly, breaks logging messages
+    # "Prefer using": fix_func_name_in_string,  # Matches "Prefer using '\"%%s...\", __func__'"
     "else is not generally useful after a break or return": fix_else_after_return,
     "Prefer __weak over __attribute__((weak))": fix_weak_attribute,
     "Possible unnecessary 'out of memory' message": fix_oom_message,
