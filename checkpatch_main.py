@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""
+checkpatch_main.py - Punto de entrada unificado
+
+Modos de operación:
+  --analyze: Analiza archivos con checkpatch.pl y genera reporte HTML
+  --fix: Aplica correcciones automáticas a warnings/errores
+  
+Compatible con el flujo anterior de checkpatch_analyzer.py y checkpatch_autofix.py
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+
+# Módulos de análisis
+from analyze_core import analyze_file, get_analysis_summary, reset_analysis
+from analyze_report import generate_analyzer_html
+from checkpatch_common import find_source_files
+
+# Módulos de autofix
+from fix_main import apply_fixes
+from fix_report import generate_html_report, summarize_results
+
+
+def analyze_mode(args):
+    """Modo análisis: analiza archivos y genera reporte HTML."""
+    
+    # Buscar archivos
+    source_dir = Path(args.source_dir).resolve()
+    if not source_dir.exists():
+        print(f"[ERROR] Directorio no encontrado: {source_dir}")
+        return 1
+    
+    files = find_source_files(source_dir, extensions=args.extensions)
+    if not files:
+        print(f"[ERROR] No se encontraron archivos con extensiones {args.extensions}")
+        return 1
+    
+    checkpatch_script = Path(args.checkpatch).resolve()
+    if not checkpatch_script.exists():
+        print(f"[ERROR] Script checkpatch.pl no encontrado: {checkpatch_script}")
+        return 1
+    
+    # Resetear estructuras globales
+    reset_analysis()
+    
+    # Estructura para JSON compatible con autofix
+    json_data = []
+    
+    # Barra de progreso
+    total = len(files)
+    completed = 0
+    lock = threading.Lock()
+    
+    def progress_bar(current, total):
+        percent = current / total * 100
+        bar_len = 40
+        filled = int(bar_len * current / total)
+        bar = '#' * filled + ' ' * (bar_len - filled)
+        return f"[{bar}] {percent:.1f}% ({current}/{total})"
+    
+    print(f"[ANALYZER] Analizando {total} archivos con {args.workers} workers...")
+    
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = {executor.submit(analyze_file, f, checkpatch_script): f for f in files}
+        
+        for future in as_completed(futures):
+            file_path = futures[future]
+            try:
+                errors, warnings, is_correct = future.result()
+                
+                # Agregar a JSON si tiene issues
+                if errors or warnings:
+                    json_data.append({
+                        "file": str(file_path),
+                        "error": errors,
+                        "warning": warnings
+                    })
+                
+                # Progreso
+                with lock:
+                    completed += 1
+                    if completed % 10 == 0 or completed == total:
+                        print(f"\r[ANALYZER] Progreso: {progress_bar(completed, total)}", end="")
+                
+            except Exception as e:
+                print(f"\n[ERROR] {file_path}: {e}")
+    
+    print()  # Nueva línea después de la barra
+    
+    # Obtener resumen
+    analysis_data = get_analysis_summary()
+    
+    # Generar HTML
+    html_path = Path(args.html)
+    html_path.parent.mkdir(parents=True, exist_ok=True)
+    generate_analyzer_html(analysis_data, html_path)
+    
+    # Generar JSON
+    json_path = Path(args.json_out)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(json_data, f, indent=2)
+    
+    # Resumen en consola
+    gc = analysis_data["global_counts"]
+    error_count = sum(analysis_data["error_reasons"].values())
+    warning_count = sum(analysis_data["warning_reasons"].values())
+    
+    print(f"[ANALYZER] Errores encontrados: {error_count}")
+    print(f"[ANALYZER] Warnings encontrados: {warning_count}")
+    print(f"[ANALYZER] Total encontrados: {error_count + warning_count}")
+    print(f"[ANALYZER] ✔ Análisis terminado.")
+    print(f"[ANALYZER] ✔ Informe HTML generado: {html_path}")
+    print(f"[ANALYZER] ✔ JSON generado: {json_path}")
+    
+    return 0
+
+
+def fix_mode(args):
+    """Modo autofix: aplica correcciones automáticas."""
+    
+    json_file = Path(args.json_input)
+    if not json_file.exists():
+        print(f"[ERROR] No existe el archivo: {json_file}")
+        return 1
+    
+    with open(json_file, "r") as f:
+        files_data = json.load(f)
+    
+    # Estructura para report_data
+    from collections import defaultdict
+    report_data = defaultdict(lambda: {"warning": [], "error": []})
+    modified_files = set()
+    
+    file_filter = Path(args.file).resolve() if args.file else None
+    
+    print("[AUTOFIX] Procesando archivos...")
+    
+    for entry in files_data:
+        file_path = Path(entry["file"]).resolve()
+        
+        if file_filter and file_filter != file_path:
+            continue
+        
+        # Reunir issues según tipo
+        issues_to_fix = []
+        if args.type in ("warning", "all"):
+            for w in entry.get("warning", []):
+                issues_to_fix.append({"type": "warning", **w})
+        if args.type in ("error", "all"):
+            for e in entry.get("error", []):
+                issues_to_fix.append({"type": "error", **e})
+        
+        if not issues_to_fix:
+            continue
+        
+        issues_to_fix.sort(key=lambda x: -x["line"])  # de abajo hacia arriba
+        
+        # Aplicar fixes
+        fix_results = apply_fixes(file_path, issues_to_fix)
+        
+        file_modified = False
+        for orig_issue, res in zip(issues_to_fix, fix_results):
+            typ = orig_issue["type"]
+            line = orig_issue["line"]
+            message = orig_issue["message"]
+            fixed = res.get("fixed", False)
+            
+            report_data[str(file_path)][typ].append({
+                "line": line,
+                "message": message,
+                "fixed": fixed
+            })
+            
+            if fixed:
+                file_modified = True
+        
+        if file_modified:
+            modified_files.add(str(file_path))
+            print(f"[AUTOFIX]  - {file_path.relative_to(file_path.parent.parent.parent)}")
+    
+    # Calcular estadísticas para resumen
+    errors_fixed = sum(1 for issues in report_data.values() for i in issues.get("error", []) if i.get("fixed"))
+    warnings_fixed = sum(1 for issues in report_data.values() for i in issues.get("warning", []) if i.get("fixed"))
+    errors_skipped = sum(1 for issues in report_data.values() for i in issues.get("error", []) if not i.get("fixed"))
+    warnings_skipped = sum(1 for issues in report_data.values() for i in issues.get("warning", []) if not i.get("fixed"))
+    
+    # Resumen en consola
+    if errors_fixed + errors_skipped > 0:
+        print(f"[AUTOFIX] Errores procesados: {errors_fixed + errors_skipped}")
+        print(f"[AUTOFIX]  - Corregidos: {errors_fixed} ({100*errors_fixed/(errors_fixed+errors_skipped):.1f}%)")
+        print(f"[AUTOFIX]  - Saltados : {errors_skipped} ({100*errors_skipped/(errors_fixed+errors_skipped):.1f}%)")
+    
+    if warnings_fixed + warnings_skipped > 0:
+        print(f"[AUTOFIX] Warnings procesados: {warnings_fixed + warnings_skipped}")
+        print(f"[AUTOFIX]  - Corregidos: {warnings_fixed} ({100*warnings_fixed/(warnings_fixed+warnings_skipped):.1f}%)")
+        print(f"[AUTOFIX]  - Saltados : {warnings_skipped} ({100*warnings_skipped/(warnings_fixed+warnings_skipped):.1f}%)")
+    
+    total = errors_fixed + warnings_fixed + errors_skipped + warnings_skipped
+    total_fixed = errors_fixed + warnings_fixed
+    if total > 0:
+        print(f"[AUTOFIX] Total procesados: {total}")
+        print(f"[AUTOFIX]  - Corregidos: {total_fixed} ({100*total_fixed/total:.1f}%)")
+        print(f"[AUTOFIX]  - Saltados : {total - total_fixed} ({100*(total-total_fixed)/total:.1f}%)")
+    
+    # Generar HTML
+    html_path = Path(args.html)
+    html_path.parent.mkdir(parents=True, exist_ok=True)
+    generate_html_report(report_data, html_path)
+    
+    # Guardar JSON de resultados
+    json_out_path = Path(args.json_out)
+    json_out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(json_out_path, "w", encoding="utf-8") as f:
+        json.dump(report_data, f, indent=2, default=str)
+    
+    print(f"[AUTOFIX] ✔ Análisis terminado {json_out_path}")
+    print(f"[AUTOFIX] ✔ Informe HTML generado : {html_path}")
+    print(f"[AUTOFIX] ✔ JSON generado: {json_out_path}")
+    
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Checkpatch analyzer y autofix unificado",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Ejemplos:
+  # Analizar archivos
+  %(prog)s --analyze --source-dir /path/to/kernel/init --checkpatch /path/to/checkpatch.pl
+  
+  # Aplicar fixes
+  %(prog)s --fix --json-input json/checkpatch.json
+        """
+    )
+    
+    # Modo de operación
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument("--analyze", action="store_true", help="Modo análisis")
+    mode_group.add_argument("--fix", action="store_true", help="Modo autofix")
+    
+    # Argumentos para análisis
+    analyze_group = parser.add_argument_group("Opciones de análisis")
+    analyze_group.add_argument("--source-dir", help="Directorio con archivos a analizar")
+    analyze_group.add_argument("--checkpatch", help="Ruta a checkpatch.pl")
+    analyze_group.add_argument("--extensions", nargs="+", default=[".c", ".h"],
+                              help="Extensiones de archivo (default: .c .h)")
+    analyze_group.add_argument("--workers", type=int, default=4,
+                              help="Número de workers paralelos (default: 4)")
+    
+    # Argumentos para autofix
+    fix_group = parser.add_argument_group("Opciones de autofix")
+    fix_group.add_argument("--json-input", help="JSON de entrada de checkpatch")
+    fix_group.add_argument("--type", choices=["warning", "error", "all"], default="all",
+                          help="Filtrar por tipo (default: all)")
+    fix_group.add_argument("--file", help="Procesar solo este fichero específico")
+    
+    # Argumentos comunes
+    parser.add_argument("--html", default="html/report.html",
+                       help="Archivo HTML de salida (default: html/report.html)")
+    parser.add_argument("--json-out", default="json/output.json",
+                       help="Archivo JSON de salida (default: json/output.json)")
+    
+    args = parser.parse_args()
+    
+    # Validar argumentos según modo
+    if args.analyze:
+        if not args.source_dir or not args.checkpatch:
+            parser.error("--analyze requiere --source-dir y --checkpatch")
+        # Ajustar defaults para analyze
+        if args.html == "html/report.html":
+            args.html = "html/analyzer.html"
+        if args.json_out == "json/output.json":
+            args.json_out = "json/checkpatch.json"
+        return analyze_mode(args)
+    
+    elif args.fix:
+        if not args.json_input:
+            parser.error("--fix requiere --json-input")
+        # Ajustar defaults para fix
+        if args.html == "html/report.html":
+            args.html = "html/autofix.html"
+        if args.json_out == "json/output.json":
+            args.json_out = "json/fixed.json"
+        return fix_mode(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
