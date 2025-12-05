@@ -600,24 +600,100 @@ def generate_analyzer_html(analysis_data, html_file):
         append("</table>")
     
     # ============================
-    # RESUMEN POR FUNCIONALIDAD
+    # DETALLE POR MOTIVO
     # ============================
-    append("<h2>Resumen por Funcionalidad</h2>")
-    append("<table>")
-    append("<tr><th>Funcionalidad</th><th>Correctos</th><th>Warnings</th><th>Errores</th></tr>")
+    append("<h2>Detalle por motivo</h2>")
     
-    for func in sorted(summary.keys()):
-        data = summary[func]
-        correct_count = len(data["correct"])
-        warning_count = len(data["warnings"])
-        error_count = len(data["errors"])
+    # Helper para generar ID único
+    import hashlib
+    def safe_id(text):
+        h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+        return f"id_{h}"
+    
+    # Errores
+    for reason, count in sorted(error_reasons.items(), key=lambda x: -x[1]):
+        rid = safe_id("ERROR:" + reason)
+        files_with_lines = error_reason_files.get(reason, [])
         
-        append(f"<tr><td>{html_module.escape(func)}</td>"
-               f"<td class='num correct'>{correct_count}</td>"
-               f"<td class='num warnings'>{warning_count}</td>"
-               f"<td class='num errors'>{error_count}</td></tr>")
+        # Agrupar por fichero y contar ocurrencias
+        file_counts = {}
+        for fp, line in files_with_lines:
+            if fp not in file_counts:
+                file_counts[fp] = []
+            file_counts[fp].append(line)
+        
+        append(f"<h4 id='{rid}' class='errors'>ERROR: {html_module.escape(reason)} — {count} casos</h4>")
+        append("<ul>")
+        for fp in sorted(file_counts.keys()):
+            lines = file_counts[fp]
+            append(f"<li>{html_module.escape(fp)} ({len(lines)})</li>")
+        append("</ul>")
     
-    append("</table>")
+    # Warnings
+    for reason, count in sorted(warning_reasons.items(), key=lambda x: -x[1]):
+        rid = safe_id("WARNING:" + reason)
+        files_with_lines = warning_reason_files.get(reason, [])
+        
+        # Agrupar por fichero y contar ocurrencias
+        file_counts = {}
+        for fp, line in files_with_lines:
+            if fp not in file_counts:
+                file_counts[fp] = []
+            file_counts[fp].append(line)
+        
+        append(f"<h4 id='{rid}' class='warnings'>WARNING: {html_module.escape(reason)} — {count} casos</h4>")
+        append("<ul>")
+        for fp in sorted(file_counts.keys()):
+            lines = file_counts[fp]
+            append(f"<li>{html_module.escape(fp)} ({len(lines)})</li>")
+        append("</ul>")
+    
+    # ============================
+    # DETALLE POR FICHERO
+    # ============================
+    append("<h2>Detalle por fichero</h2>")
+    
+    # Recopilar todos los ficheros con warnings/errors
+    all_files_with_issues = {}
+    
+    for reason, files_list in error_reason_files.items():
+        for fp, line in files_list:
+            if fp not in all_files_with_issues:
+                all_files_with_issues[fp] = {"errors": [], "warnings": []}
+            all_files_with_issues[fp]["errors"].append((reason, line))
+    
+    for reason, files_list in warning_reason_files.items():
+        for fp, line in files_list:
+            if fp not in all_files_with_issues:
+                all_files_with_issues[fp] = {"errors": [], "warnings": []}
+            all_files_with_issues[fp]["warnings"].append((reason, line))
+    
+    # Generar detalle por fichero
+    for fp in sorted(all_files_with_issues.keys()):
+        issues = all_files_with_issues[fp]
+        total_issues = len(issues["errors"]) + len(issues["warnings"])
+        fid = safe_id(fp)
+        
+        append(f"<details class='file-detail' id='{fid}'>")
+        append(f"<summary>{html_module.escape(fp)}")
+        append(f"<div class='stats'>")
+        append(f"<span class='fixed-badge'>{total_issues} issues</span>")
+        append(f"</div></summary>")
+        append("<div class='detail-content'>")
+        
+        if issues["errors"]:
+            append("<h4 class='errors'>Errores</h4><ul>")
+            for reason, line in sorted(issues["errors"], key=lambda x: x[1]):
+                append(f"<li>Línea {line}: ERROR: {html_module.escape(reason)}</li>")
+            append("</ul>")
+        
+        if issues["warnings"]:
+            append("<h4 class='warnings'>Warnings</h4><ul>")
+            for reason, line in sorted(issues["warnings"], key=lambda x: x[1]):
+                append(f"<li>Línea {line}: WARNING: {html_module.escape(reason)}</li>")
+            append("</ul>")
+        
+        append("</div></details>")
     
     append("</body></html>")
     
