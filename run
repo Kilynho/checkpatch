@@ -4,16 +4,8 @@
 # Volver al directorio del checkpatch
 cd /home/kilynho/src/checkpatch/ || exit
 
-# Ejecutar análisis con main.py
-python3 main.py --analyze \
-    --source-dir ~/src/kernel/linux/init \
-    --checkpatch ~/src/kernel/linux/scripts/checkpatch.pl \
-    --workers 4 \
-    --html html/analyzer.html \
-    --json-out json/checkpatch.json
+# Ejecutar análisis con main.py (estilo original simplificado)
+python3 main.py --analyze ~/src/kernel/linux --paths init
 
 # Ejecutar autofix
-python3 main.py --fix \
-    --json-input json/checkpatch.json \
-    --html html/autofix.html \
-    --json-out json/fixed.json
+python3 main.py --fix --json-input json/checkpatch.json

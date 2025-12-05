@@ -34,21 +34,18 @@ from common import find_source_files
 def analyze_mode(args):
     """Modo análisis: analiza archivos y genera reporte HTML."""
     
-    # Buscar archivos
-    source_dir = Path(args.source_dir).resolve()
-    if not source_dir.exists():
-        print(f"[ERROR] Directorio no encontrado: {source_dir}")
-        return 1
+    # Buscar archivos en todos los directorios especificados
+    all_files = []
+    for source_dir in args.source_dirs:
+        files = find_source_files(source_dir, extensions=args.extensions)
+        all_files.extend(files)
     
-    files = find_source_files(source_dir, extensions=args.extensions)
-    if not files:
+    if not all_files:
         print(f"[ERROR] No se encontraron archivos con extensiones {args.extensions}")
         return 1
     
-    checkpatch_script = Path(args.checkpatch).resolve()
-    if not checkpatch_script.exists():
-        print(f"[ERROR] Script checkpatch.pl no encontrado: {checkpatch_script}")
-        return 1
+    checkpatch_script = args.checkpatch
+    kernel_root = args.kernel_root
     
     # Resetear estructuras globales
     reset_analysis()
@@ -57,7 +54,7 @@ def analyze_mode(args):
     json_data = []
     
     # Barra de progreso
-    total = len(files)
+    total = len(all_files)
     completed = 0
     lock = threading.Lock()
     
@@ -71,7 +68,7 @@ def analyze_mode(args):
     print(f"[ANALYZER] Analizando {total} archivos con {args.workers} workers...")
     
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(analyze_file, f, checkpatch_script): f for f in files}
+        futures = {executor.submit(analyze_file, f, checkpatch_script, kernel_root): f for f in all_files}
         
         for future in as_completed(futures):
             file_path = futures[future]
@@ -237,8 +234,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos:
-  # Analizar archivos
-  %(prog)s --analyze --source-dir /path/to/kernel/init --checkpatch /path/to/checkpatch.pl
+  # Analizar archivos (estilo original)
+  %(prog)s --analyze /path/to/kernel/linux --paths init
   
   # Aplicar fixes
   %(prog)s --fix --json-input json/checkpatch.json
@@ -247,13 +244,14 @@ Ejemplos:
     
     # Modo de operación
     mode_group = parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument("--analyze", action="store_true", help="Modo análisis")
+    mode_group.add_argument("--analyze", metavar="KERNEL_ROOT", 
+                           help="Modo análisis: ruta al root del kernel Linux")
     mode_group.add_argument("--fix", action="store_true", help="Modo autofix")
     
     # Argumentos para análisis
     analyze_group = parser.add_argument_group("Opciones de análisis")
-    analyze_group.add_argument("--source-dir", help="Directorio con archivos a analizar")
-    analyze_group.add_argument("--checkpatch", help="Ruta a checkpatch.pl")
+    analyze_group.add_argument("--paths", nargs="+", 
+                              help="Subdirectorios a analizar (ej: init, kernel). Si se omite, analiza todo")
     analyze_group.add_argument("--extensions", nargs="+", default=[".c", ".h"],
                               help="Extensiones de archivo (default: .c .h)")
     analyze_group.add_argument("--workers", type=int, default=4,
@@ -267,32 +265,46 @@ Ejemplos:
     fix_group.add_argument("--file", help="Procesar solo este fichero específico")
     
     # Argumentos comunes
-    parser.add_argument("--html", default="html/report.html",
-                       help="Archivo HTML de salida (default: html/report.html)")
-    parser.add_argument("--json-out", default="json/output.json",
-                       help="Archivo JSON de salida (default: json/output.json)")
+    parser.add_argument("--html", help="Archivo HTML de salida (default: html/analyzer.html o html/autofix.html)")
+    parser.add_argument("--json-out", help="Archivo JSON de salida (default: json/checkpatch.json o json/fixed.json)")
     
     args = parser.parse_args()
     
     # Validar argumentos según modo
     if args.analyze:
-        if not args.source_dir or not args.checkpatch:
-            parser.error("--analyze requiere --source-dir y --checkpatch")
-        # Ajustar defaults para analyze
-        if args.html == "html/report.html":
-            args.html = "html/analyzer.html"
-        if args.json_out == "json/output.json":
-            args.json_out = "json/checkpatch.json"
+        # Configurar rutas automáticamente desde kernel root
+        kernel_root = Path(args.analyze).resolve()
+        if not kernel_root.exists():
+            parser.error(f"Kernel root no encontrado: {kernel_root}")
+        
+        # Checkpatch.pl debe estar en scripts/
+        checkpatch = kernel_root / "scripts" / "checkpatch.pl"
+        if not checkpatch.exists():
+            parser.error(f"checkpatch.pl no encontrado en {checkpatch}")
+        
+        # Determinar directorios a analizar
+        if args.paths:
+            source_dirs = [kernel_root / p for p in args.paths]
+            for sd in source_dirs:
+                if not sd.exists():
+                    parser.error(f"Subdirectorio no encontrado: {sd}")
+        else:
+            source_dirs = [kernel_root]
+        
+        # Defaults para analyze
+        args.source_dirs = source_dirs
+        args.kernel_root = kernel_root
+        args.checkpatch = checkpatch
+        args.html = args.html or "html/analyzer.html"
+        args.json_out = args.json_out or "json/checkpatch.json"
         return analyze_mode(args)
     
     elif args.fix:
         if not args.json_input:
             parser.error("--fix requiere --json-input")
         # Ajustar defaults para fix
-        if args.html == "html/report.html":
-            args.html = "html/autofix.html"
-        if args.json_out == "json/output.json":
-            args.json_out = "json/fixed.json"
+        args.html = args.html or "html/autofix.html"
+        args.json_out = args.json_out or "json/fixed.json"
         return fix_mode(args)
 
 

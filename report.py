@@ -441,10 +441,21 @@ def generate_analyzer_html(analysis_data, html_file):
     warning_reasons = analysis_data["warning_reasons"]
     error_reason_files = analysis_data["error_reason_files"]
     warning_reason_files = analysis_data["warning_reason_files"]
+    file_outputs = analysis_data.get("file_outputs", {})
+    kernel_dir = analysis_data.get("kernel_dir", "")
     
     html_out = []
     append = html_out.append
     timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
+    
+    # Helper para rutas relativas
+    def get_relative_path(fp):
+        if kernel_dir:
+            try:
+                return os.path.relpath(fp, kernel_dir)
+            except:
+                return fp
+        return fp
     
     # Header y CSS
     append("<!doctype html><html><head><meta charset='utf-8'>")
@@ -545,13 +556,21 @@ def generate_analyzer_html(analysis_data, html_file):
             bar_files = bar_width(num_files, total_error_files, max_width=PCT_CELL_WIDTH - 50)
             bar_cases = bar_width(count, total_error_cases, max_width=PCT_CELL_WIDTH - 50)
             
+            # Helper para generar ID único
+            import hashlib
+            def safe_id(text):
+                h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+                return f"id_{h}"
+            
+            reason_id = safe_id("ERROR:" + reason)
+            
             append(f"<tr><td>ERROR: {html_module.escape(reason)}</td>"
                    f"<td class='num'>{num_files}</td>"
                    f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
                    f"<span style='flex:none'>{pct_files}</span>"
                    f"<div class='bar'><div class='bar-inner bar-errors' style='width:{bar_files}px'></div></div>"
                    f"</td>"
-                   f"<td class='num'>{count}</td>"
+                   f"<td class='num'><a href='#{reason_id}'>{count}</a></td>"
                    f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
                    f"<span style='flex:none'>{pct_cases}</span>"
                    f"<div class='bar'><div class='bar-inner bar-errors' style='width:{bar_cases}px'></div></div>"
@@ -586,13 +605,21 @@ def generate_analyzer_html(analysis_data, html_file):
             bar_files = bar_width(num_files, total_warning_files, max_width=PCT_CELL_WIDTH - 50)
             bar_cases = bar_width(count, total_warning_cases, max_width=PCT_CELL_WIDTH - 50)
             
+            # Helper para generar ID único
+            import hashlib
+            def safe_id(text):
+                h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+                return f"id_{h}"
+            
+            reason_id = safe_id("WARNING:" + reason)
+            
             append(f"<tr><td>WARNING: {html_module.escape(reason)}</td>"
                    f"<td class='num'>{num_files}</td>"
                    f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
                    f"<span style='flex:none'>{pct_files}</span>"
                    f"<div class='bar'><div class='bar-inner bar-warnings' style='width:{bar_files}px'></div></div>"
                    f"</td>"
-                   f"<td class='num'>{count}</td>"
+                   f"<td class='num'><a href='#{reason_id}'>{count}</a></td>"
                    f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
                    f"<span style='flex:none'>{pct_cases}</span>"
                    f"<div class='bar'><div class='bar-inner bar-warnings' style='width:{bar_cases}px'></div></div>"
@@ -626,7 +653,9 @@ def generate_analyzer_html(analysis_data, html_file):
         append("<ul>")
         for fp in sorted(file_counts.keys()):
             lines = file_counts[fp]
-            append(f"<li>{html_module.escape(fp)} ({len(lines)})</li>")
+            rel_path = get_relative_path(fp)
+            file_id = safe_id(fp)
+            append(f"<li><a href='#{file_id}'>{html_module.escape(rel_path)}</a> ({len(lines)})</li>")
         append("</ul>")
     
     # Warnings
@@ -645,7 +674,9 @@ def generate_analyzer_html(analysis_data, html_file):
         append("<ul>")
         for fp in sorted(file_counts.keys()):
             lines = file_counts[fp]
-            append(f"<li>{html_module.escape(fp)} ({len(lines)})</li>")
+            rel_path = get_relative_path(fp)
+            file_id = safe_id(fp)
+            append(f"<li><a href='#{file_id}'>{html_module.escape(rel_path)}</a> ({len(lines)})</li>")
         append("</ul>")
     
     # ============================
@@ -653,45 +684,86 @@ def generate_analyzer_html(analysis_data, html_file):
     # ============================
     append("<h2>Detalle por fichero</h2>")
     
+    # Helper para formatear el output con colores
+    def format_checkpatch_output(output_text):
+        if not output_text or not output_text.strip():
+            return '<pre class="diff-pre" style="color:#999;">No output</pre>'
+        
+        # Convertir kernel_dir a string
+        kernel_dir_str = str(kernel_dir) if kernel_dir else ""
+        
+        lines_out = ['<pre class="diff-pre">']
+        prev_was_warning_or_error = False
+        for line in output_text.split('\n'):
+            # Reemplazar ruta completa por relativa en líneas FILE:
+            # Mantener el formato: #273: FILE: init/initramfs.c:273:
+            if kernel_dir_str and 'FILE:' in line and kernel_dir_str in line:
+                line = line.replace(kernel_dir_str + '/', '')
+                line = line.replace(kernel_dir_str, '')
+            # También en líneas ERROR:/WARNING: que tienen ruta al inicio
+            elif kernel_dir_str and kernel_dir_str in line and (':' in line and ('ERROR:' in line or 'WARNING:' in line)):
+                line = line.replace(kernel_dir_str + '/', '')
+                line = line.replace(kernel_dir_str, '')
+            
+            # Añadir línea en blanco entre ocurrencias (antes de cada WARNING/ERROR que no sea la primera)
+            if (line.startswith('WARNING') or line.startswith('ERROR')):
+                if prev_was_warning_or_error or len(lines_out) > 1:
+                    lines_out.append('')  # Línea en blanco para separar
+                prev_was_warning_or_error = True
+            
+            # Aplicar colores según tipo de línea (formato original analyzer)
+            if line.startswith('#'):
+                lines_out.append(f'<span style="color:#999; font-weight:bold;">{html_module.escape(line)}</span>')
+            elif line.startswith('+'):
+                lines_out.append(f'<span style="color:#4CAF50; background:#f1f8f4;">{html_module.escape(line)}</span>')
+            elif line.startswith('WARNING'):
+                lines_out.append(f'<span style="color:#73400D; background:#FAE6D1;">{html_module.escape(line)}</span>')
+            elif line.startswith('ERROR'):
+                lines_out.append(f'<span style="color:#f44336; background:#ffe6e6;">{html_module.escape(line)}</span>')
+            elif line.strip():
+                lines_out.append(html_module.escape(line))
+        lines_out.append('</pre>')
+        return '\n'.join(lines_out)
+    
     # Recopilar todos los ficheros con warnings/errors
     all_files_with_issues = {}
     
     for reason, files_list in error_reason_files.items():
         for fp, line in files_list:
             if fp not in all_files_with_issues:
-                all_files_with_issues[fp] = {"errors": [], "warnings": []}
-            all_files_with_issues[fp]["errors"].append((reason, line))
+                all_files_with_issues[fp] = {"errors": 0, "warnings": 0}
+            all_files_with_issues[fp]["errors"] += 1
     
     for reason, files_list in warning_reason_files.items():
         for fp, line in files_list:
             if fp not in all_files_with_issues:
-                all_files_with_issues[fp] = {"errors": [], "warnings": []}
-            all_files_with_issues[fp]["warnings"].append((reason, line))
+                all_files_with_issues[fp] = {"errors": 0, "warnings": 0}
+            all_files_with_issues[fp]["warnings"] += 1
+    
+    # Ordenar por total de issues descendente
+    sorted_files = sorted(all_files_with_issues.items(), 
+                         key=lambda x: x[1]["errors"] + x[1]["warnings"], 
+                         reverse=True)
     
     # Generar detalle por fichero
-    for fp in sorted(all_files_with_issues.keys()):
-        issues = all_files_with_issues[fp]
-        total_issues = len(issues["errors"]) + len(issues["warnings"])
+    for fp, counts in sorted_files:
+        total_warnings = counts["warnings"]
+        total_errors = counts["errors"]
+        total_issues = total_warnings + total_errors
         fid = safe_id(fp)
+        rel_path = get_relative_path(fp)
         
         append(f"<details class='file-detail' id='{fid}'>")
-        append(f"<summary>{html_module.escape(fp)}")
-        append(f"<div class='stats'>")
-        append(f"<span class='fixed-badge'>{total_issues} issues</span>")
-        append(f"</div></summary>")
+        append(f"<summary>{html_module.escape(rel_path)}")
+        append(f"<div class='stats'><div class='stat-item'>")
+        append(f"<span class='added'>+{total_warnings}</span> <span class='removed'>+{total_errors}</span>")
+        append(f"</div><span class='fixed-badge'>{total_issues} total</span></div></summary>")
         append("<div class='detail-content'>")
         
-        if issues["errors"]:
-            append("<h4 class='errors'>Errores</h4><ul>")
-            for reason, line in sorted(issues["errors"], key=lambda x: x[1]):
-                append(f"<li>Línea {line}: ERROR: {html_module.escape(reason)}</li>")
-            append("</ul>")
-        
-        if issues["warnings"]:
-            append("<h4 class='warnings'>Warnings</h4><ul>")
-            for reason, line in sorted(issues["warnings"], key=lambda x: x[1]):
-                append(f"<li>Línea {line}: WARNING: {html_module.escape(reason)}</li>")
-            append("</ul>")
+        # Mostrar output formateado si existe
+        output = file_outputs.get(fp, "")
+        if output:
+            append(format_checkpatch_output(output))
         
         append("</div></details>")
     

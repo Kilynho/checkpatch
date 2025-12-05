@@ -139,6 +139,8 @@ error_reasons = Counter()
 warning_reasons = Counter()
 error_reason_files = defaultdict(list)
 warning_reason_files = defaultdict(list)
+file_outputs = {}  # Guarda el output completo de checkpatch por fichero
+kernel_dir_path = ""  # Para calcular rutas relativas
 
 
 def classify_functionality(file_path):
@@ -150,34 +152,42 @@ def classify_functionality(file_path):
     return "Other"
 
 
-def analyze_file(file_path, checkpatch_script):
+def analyze_file(file_path, checkpatch_script, kernel_dir=None):
     """
     Analiza un archivo con checkpatch y actualiza las estructuras globales.
     Retorna (errors, warnings, is_correct)
     """
-    errors, warnings = run_checkpatch(file_path, checkpatch_script)
+    global kernel_dir_path
+    if kernel_dir:
+        kernel_dir_path = kernel_dir
+    
+    errors, warnings, output = run_checkpatch(file_path, checkpatch_script, kernel_dir)
     
     functionality = classify_functionality(file_path)
+    file_path_str = str(file_path)
+    
+    # Guardar output completo
+    file_outputs[file_path_str] = output
     
     if errors:
-        summary[functionality]["errors"].append(str(file_path))
+        summary[functionality]["errors"].append(file_path_str)
         global_counts["errors"] += len(errors)
         for err in errors:
             msg = err["message"].replace("ERROR: ", "")
             error_reasons[msg] += 1
-            error_reason_files[msg].append((str(file_path), err["line"]))
+            error_reason_files[msg].append((file_path_str, err["line"]))
     
     if warnings:
-        summary[functionality]["warnings"].append(str(file_path))
+        summary[functionality]["warnings"].append(file_path_str)
         global_counts["warnings"] += len(warnings)
         for warn in warnings:
             msg = warn["message"].replace("WARNING: ", "")
             warning_reasons[msg] += 1
-            warning_reason_files[msg].append((str(file_path), warn["line"]))
+            warning_reason_files[msg].append((file_path_str, warn["line"]))
     
     is_correct = not errors and not warnings
     if is_correct:
-        summary[functionality]["correct"].append(str(file_path))
+        summary[functionality]["correct"].append(file_path_str)
         global_counts["correct"] += 1
     
     return errors, warnings, is_correct
@@ -192,13 +202,15 @@ def get_analysis_summary():
         "warning_reasons": dict(warning_reasons),
         "error_reason_files": dict(error_reason_files),
         "warning_reason_files": dict(warning_reason_files),
+        "file_outputs": dict(file_outputs),
+        "kernel_dir": kernel_dir_path,
     }
 
 
 def reset_analysis():
     """Resetea las estructuras globales de análisis."""
     global summary, global_counts, error_reasons, warning_reasons
-    global error_reason_files, warning_reason_files
+    global error_reason_files, warning_reason_files, file_outputs, kernel_dir_path
     
     summary.clear()
     global_counts = {"correct": 0, "warnings": 0, "errors": 0}
@@ -206,4 +218,6 @@ def reset_analysis():
     warning_reasons.clear()
     error_reason_files.clear()
     warning_reason_files.clear()
+    file_outputs.clear()
+    kernel_dir_path = ""
 

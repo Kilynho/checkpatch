@@ -68,51 +68,86 @@ details.file-detail summary:hover { background: #f0f0f0; }
 # Funciones comunes checkpatch
 # ============================
 
-def run_checkpatch(file_path, checkpatch_script):
+def run_checkpatch(file_path, checkpatch_script, kernel_dir=None):
     """
-    Ejecuta checkpatch.pl sobre un archivo y retorna errors y warnings.
-    Retorna (error_list, warning_list) donde cada item es {"line": N, "message": "..."}
+    Ejecuta checkpatch.pl sobre un archivo y retorna errors, warnings y output completo.
+    Retorna (error_list, warning_list, full_output) donde cada item es {"line": N, "message": "..."}
     """
     try:
-        result = subprocess.run(
-            ["perl", checkpatch_script, "--no-tree", "--terse", "--file", str(file_path)],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        # Si tenemos kernel_dir, usar ruta relativa para que checkpatch la muestre correctamente
+        import os
+        if kernel_dir:
+            rel_path = os.path.relpath(file_path, kernel_dir)
+            result = subprocess.run(
+                ["perl", checkpatch_script, "--no-tree", "--file", rel_path],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(kernel_dir)
+            )
+        else:
+            result = subprocess.run(
+                ["perl", checkpatch_script, "--no-tree", "--file", str(file_path)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
         
+        full_output = result.stdout
         errors = []
         warnings = []
         
-        for line in result.stdout.split("\n"):
-            if not line.strip():
-                continue
+        lines_list = result.stdout.split("\n")
+        i = 0
+        while i < len(lines_list):
+            line = lines_list[i].strip()
             
-            # Formato: file:line: ERROR/WARNING: message
-            if ": ERROR: " in line:
-                parts = line.split(": ERROR: ", 1)
-                if len(parts) == 2:
-                    try:
-                        line_num = int(parts[0].split(":")[-1])
-                        errors.append({"line": line_num, "message": f"ERROR: {parts[1]}"})
-                    except (ValueError, IndexError):
-                        pass
+            # Formato sin --terse:
+            # WARNING: message
+            # #line: FILE: path:line:
+            # + code
             
-            elif ": WARNING: " in line:
-                parts = line.split(": WARNING: ", 1)
-                if len(parts) == 2:
-                    try:
-                        line_num = int(parts[0].split(":")[-1])
-                        warnings.append({"line": line_num, "message": f"WARNING: {parts[1]}"})
-                    except (ValueError, IndexError):
-                        pass
+            if line.startswith("ERROR: "):
+                message = line
+                line_num = 0
+                # Buscar siguiente línea con #N: FILE:
+                if i + 1 < len(lines_list):
+                    next_line = lines_list[i + 1].strip()
+                    if next_line.startswith("#") and "FILE:" in next_line:
+                        try:
+                            # Extraer número de línea de FILE: path:NUM:
+                            file_part = next_line.split("FILE:")[1].strip()
+                            line_num = int(file_part.split(":")[-2])
+                        except (IndexError, ValueError):
+                            pass
+                errors.append({"line": line_num, "message": message})
+                i += 1
+                
+            elif line.startswith("WARNING: "):
+                message = line
+                line_num = 0
+                # Buscar siguiente línea con #N: FILE:
+                if i + 1 < len(lines_list):
+                    next_line = lines_list[i + 1].strip()
+                    if next_line.startswith("#") and "FILE:" in next_line:
+                        try:
+                            # Extraer número de línea de FILE: path:NUM:
+                            file_part = next_line.split("FILE:")[1].strip()
+                            line_num = int(file_part.split(":")[-2])
+                        except (IndexError, ValueError):
+                            pass
+                warnings.append({"line": line_num, "message": message})
+                i += 1
+                
+            else:
+                i += 1
         
-        return errors, warnings
+        return errors, warnings, full_output
     
     except subprocess.TimeoutExpired:
-        return [], []
+        return [], [], ""
     except Exception:
-        return [], []
+        return [], [], ""
 
 
 def find_source_files(directory, extensions=[".c", ".h"]):
