@@ -26,6 +26,25 @@ from constants import (
     SPACE_AFTER_OPEN_PAREN,
     SPACE_BEFORE_TABS,
     BARE_UNSIGNED,
+    INDENT_PATTERN,
+    EMPTY_RETURN_PATTERN,
+    BLOCK_COMMENT_END_PATTERN,
+    ELSE_IF_PATTERN,
+    IF_PATTERN,
+    COMPARISON_OPERATORS,
+    SIMPLE_VAR_IN_PARENS,
+    FUNCTION_NAME_IN_STRING,
+    CHAR_ARRAY_DECLARATION,
+    STATIC_CHAR_PTR,
+    STATIC_CHAR_PTR_DECL,
+    INITDATA_BEFORE,
+    INITDATA_AFTER,
+    JIFFIES_NOT_EQ,
+    JIFFIES_EQ,
+    STRCPY_PATTERN,
+    PRINTK_KERN_CONT,
+    STRING_WITH_COMMA,
+    STRING_WITH_PAREN,
 )
 
 def fix_missing_blank_line(file_path, line_number):
@@ -72,8 +91,8 @@ def fix_assignment_in_if(file_path, line_number):
         line = lines[idx]
 
         # detectar if / else if en la línea
-        m_else_if = re.search(r"\belse\s+if\b", line)
-        m_if = re.search(r"\bif\b", line)
+        m_else_if = ELSE_IF_PATTERN.search(line)
+        m_if = IF_PATTERN.search(line)
         if m_else_if:
             if_pos = m_else_if.start()
             has_else = True
@@ -130,8 +149,7 @@ def fix_assignment_in_if(file_path, line_number):
 
         # buscar asignación dentro de la expresión ya limpia
         # Primero encontrar la posición del primer operador de comparación
-        comp_pattern = re.compile(r'(!=|==|<=|>=|<|>)')
-        m_comp = comp_pattern.search(expr_clean)
+        m_comp = COMPARISON_OPERATORS.search(expr_clean)
         
         if m_comp:
             comp_pos = m_comp.start()
@@ -184,9 +202,9 @@ def fix_assignment_in_if(file_path, line_number):
         cond = strip_outer_parens(cond)
         
         # limpiar paréntesis alrededor de variables simples: (variable) -> variable
-        cond = re.sub(r'\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)', r'\1', cond)
+        cond = SIMPLE_VAR_IN_PARENS.sub(r'\1', cond)
 
-        base_indent = re.match(r"(\s*)", line).group(1)
+        base_indent = INDENT_PATTERN.match(line).group(1)
         trailing = line[end_pos+1:].rstrip('\n')
 
         # Si es 'else if' con llave de apertura en la misma línea, hacer transformación especial
@@ -352,7 +370,7 @@ def fix_prefer_notice(file_path, line_number):
         elif "printk(KERN_NOTICE" in line and '"' not in line:
             if idx + 1 < len(lines):
                 next_line = lines[idx + 1]
-                indent = re.match(r'(\s*)', line).group(1)
+                indent = INDENT_PATTERN.match(line).group(1)
                 lines[idx] = indent + "pr_notice(" + next_line.strip()
                 del lines[idx + 1]
                 return True
@@ -363,11 +381,11 @@ def fix_void_return(file_path, line_number):
     def callback(lines, idx):
         # Checkpatch reporta la línea después del return (la llave de cierre)
         # Buscar el return; en la línea anterior
-        if idx > 0 and re.match(r'^\s*return\s*;\s*$', lines[idx - 1]):
+        if idx > 0 and EMPTY_RETURN_PATTERN.match(lines[idx - 1]):
             del lines[idx - 1]
             return True
         # Por si acaso, también verificar línea actual
-        if re.match(r'^\s*return\s*;\s*$', lines[idx]):
+        if EMPTY_RETURN_PATTERN.match(lines[idx]):
             del lines[idx]
             return True
         return False
@@ -406,9 +424,9 @@ def fix_unnecessary_braces(file_path, line_number):
 def fix_block_comment_trailing(file_path, line_number):
     def callback(lines, idx):
         line = lines[idx]
-        if line.rstrip().endswith('*/') and not re.match(r'^\s*\*/\s*$', line):
+        if line.rstrip().endswith('*/') and not BLOCK_COMMENT_END_PATTERN.match(line):
             content = line.rstrip()[:-2].rstrip()
-            indent = re.match(r'^(\s*)', line).group(1)
+            indent = INDENT_PATTERN.match(line).group(1)
             lines[idx] = content + '\n'
             lines.insert(idx + 1, indent + ' */')
             return True
@@ -421,7 +439,7 @@ def fix_char_array_static_const(file_path, line_number):
         # Debe convertirse a: static const char * const nombre[]
         
         # Caso 1: static char *nombre[] o static char **nombre
-        match = re.search(r'(static\s+)char\s+(\*+\w+\[\])', line)
+        match = STATIC_CHAR_PTR_DECL.search(line)
         if match:
             return line.replace(match.group(0), f'{match.group(1)}const char * const {match.group(2)[1:]}', 1)
         
@@ -432,7 +450,7 @@ def fix_char_array_static_const(file_path, line_number):
         
         # Caso 3: ya está static char pero le falta const al final del *
         # static char *nombre[] → static const char * const nombre[]
-        if re.search(r'static\s+char\s+\*', line) and 'const char' not in line:
+        if STATIC_CHAR_PTR.search(line) and 'const char' not in line:
             return line.replace('static char *', 'static const char * const ', 1)
         
         return None
@@ -476,7 +494,7 @@ def fix_printk_info(file_path, line_number):
             return True
         # Caso 3: Formato multilínea - printk(KERN_INFO en línea actual, mensaje en siguiente
         if "printk(KERN_INFO" in line and '"' not in line and idx + 1 < len(lines) and '"' in lines[idx + 1]:
-            indent = re.match(r'(\s*)', line).group(1)
+            indent = INDENT_PATTERN.match(line).group(1)
             lines[idx] = indent + "pr_info(" + lines[idx + 1].strip()
             del lines[idx + 1]
             return True
@@ -543,7 +561,7 @@ def fix_printk_emerg(file_path, line_number):
             return True
         # Caso 3: Formato multilínea - printk(KERN_EMERG en línea actual, mensaje en siguiente
         if "printk(KERN_EMERG" in line and '"' not in line and idx + 1 < len(lines) and '"' in lines[idx + 1]:
-            indent = re.match(r'(\s*)', line).group(1)
+            indent = INDENT_PATTERN.match(line).group(1)
             lines[idx] = indent + "pr_emerg(" + lines[idx + 1].strip()
             del lines[idx + 1]
             return True
@@ -574,7 +592,7 @@ def fix_jiffies_comparison(file_path, line_number):
         # Reemplazar: jiffies != X -> time_after(jiffies, X)
         if 'jiffies !=' in line or '!= jiffies' in line:
             # Capturar la comparación
-            match = re.search(r'(\w+)\s*!=\s*jiffies', line)
+            match = JIFFIES_NOT_EQ.search(line)
             if match:
                 var = match.group(1)
                 return line.replace(f'{var} != jiffies', f'time_after(jiffies, {var})')
@@ -586,7 +604,7 @@ def fix_jiffies_comparison(file_path, line_number):
         # Reemplazar: jiffies == X -> time_before_eq(jiffies, X) o !time_after(jiffies, X)
         # Usamos la negación de time_after para == 
         if 'jiffies ==' in line or '== jiffies' in line:
-            match = re.search(r'(\w+)\s*==\s*jiffies', line)
+            match = JIFFIES_EQ.search(line)
             if match:
                 var = match.group(1)
                 return line.replace(f'{var} == jiffies', f'!time_after(jiffies, {var})')
@@ -605,7 +623,7 @@ def fix_func_name_in_string(file_path, line_number):
         # El warning de checkpatch dice específicamente el nombre de la función
         
         # Buscar strings con nombres de función seguidos de : o espacio o (
-        match = re.search(r'"([a-zA-Z_][a-zA-Z0-9_]+)\s*[:(\s]', line)
+        match = FUNCTION_NAME_IN_STRING.search(line)
         if not match:
             return None
             
@@ -647,7 +665,7 @@ def fix_else_after_return(file_path, line_number):
             if '} else {' in line:
                 lines[idx] = line.replace('} else {', '}')
                 # Añadir apertura de bloque en nueva línea
-                indent = re.match(r'(\s*)', line).group(1)
+                indent = INDENT_PATTERN.match(line).group(1)
                 lines.insert(idx + 1, indent + '{\n')
                 return True
             elif line.strip() == 'else {':
@@ -694,14 +712,14 @@ def fix_initdata_placement(file_path, line_number):
         line = lines[idx]
         if '__initdata' in line and ';' in line:
             # Patrón 1: static __initdata tipo variable;
-            match = re.match(r'^(\s*)(static\s+)__initdata\s+(.+?)\s+([^;=]+)(.*);', line)
+            match = INITDATA_BEFORE.match(line)
             if match:
                 indent, static, tipo, varname, rest = match.groups()
                 rest = rest if rest.startswith(' ') else (' ' + rest if rest else '')
                 lines[idx] = f'{indent}{static}{tipo} {varname.strip()} __initdata{rest};\n'
                 return True
             # Patrón 2: static tipo __initdata variable = valor;
-            match = re.match(r'^(\s*)(static\s+)(.+?)\s+__initdata\s+([^;=]+)(.*);', line)
+            match = INITDATA_AFTER.match(line)
             if match:
                 indent, static, tipo, varname, rest = match.groups()
                 rest = rest if rest.startswith(' ') else (' ' + rest if rest else '')
@@ -809,7 +827,7 @@ def fix_logging_continuation(file_path, line_number):
     def transform(line):
         if 'KERN_CONT' in line:
             # Reemplazar printk(KERN_CONT con pr_cont(
-            return re.sub(r'printk\s*\(\s*KERN_CONT\s*', 'pr_cont(', line)
+            return PRINTK_KERN_CONT.sub('pr_cont(', line)
         return None
     return apply_line_transform(file_path, line_number, transform)
 
