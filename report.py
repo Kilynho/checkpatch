@@ -521,38 +521,82 @@ def generate_analyzer_html(analysis_data, html_file):
     # RESUMEN POR MOTIVO - ERRORES
     # ============================
     if error_reasons:
-        append("<h2>Resumen por Motivo - ERRORES</h2>")
+        append("<h3 class='errors'>Errores</h3>")
         append("<table>")
-        append("<tr><th>Motivo</th><th>Casos</th><th>Ficheros</th></tr>")
+        append(f"<tr><th>Motivo</th><th>Ficheros</th>"
+               f"<th style='width:{PCT_CELL_WIDTH}px;'>% Ficheros</th>"
+               f"<th>Casos</th><th style='width:{PCT_CELL_WIDTH}px;'>% de errors</th></tr>")
+        
+        # Calcular totales para porcentajes
+        all_error_files = set()
+        for fp_list in error_reason_files.values():
+            for fp, _ in fp_list:
+                all_error_files.add(fp)
+        total_error_files = len(all_error_files)
+        total_error_cases = sum(error_reasons.values())
+        
         for reason, count in sorted(error_reasons.items(), key=lambda x: -x[1]):
-            files = error_reason_files.get(reason, [])
-            append(f"<tr><td>{html_module.escape(reason)}</td>"
+            files_for_reason = set(fp for fp, _ in error_reason_files.get(reason, []))
+            num_files = len(files_for_reason)
+            
+            pct_files = percentage(num_files, total_error_files)
+            pct_cases = percentage(count, total_error_cases)
+            
+            bar_files = bar_width(num_files, total_error_files, max_width=PCT_CELL_WIDTH - 50)
+            bar_cases = bar_width(count, total_error_cases, max_width=PCT_CELL_WIDTH - 50)
+            
+            append(f"<tr><td>ERROR: {html_module.escape(reason)}</td>"
+                   f"<td class='num'>{num_files}</td>"
+                   f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+                   f"<span style='flex:none'>{pct_files}</span>"
+                   f"<div class='bar'><div class='bar-inner bar-errors' style='width:{bar_files}px'></div></div>"
+                   f"</td>"
                    f"<td class='num'>{count}</td>"
-                   f"<td><details><summary>{len(set(f[0] for f in files))} fichero(s)</summary><ul>")
-            for file_path, line in files[:50]:  # Limitar a 50 para no sobrecargar
-                append(f"<li>{html_module.escape(file_path)}:{line}</li>")
-            if len(files) > 50:
-                append(f"<li>... y {len(files) - 50} más</li>")
-            append("</ul></details></td></tr>")
+                   f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+                   f"<span style='flex:none'>{pct_cases}</span>"
+                   f"<div class='bar'><div class='bar-inner bar-errors' style='width:{bar_cases}px'></div></div>"
+                   f"</td></tr>")
         append("</table>")
     
     # ============================
     # RESUMEN POR MOTIVO - WARNINGS
     # ============================
     if warning_reasons:
-        append("<h2>Resumen por Motivo - WARNINGS</h2>")
+        append("<h3 class='warnings'>Warnings</h3>")
         append("<table>")
-        append("<tr><th>Motivo</th><th>Casos</th><th>Ficheros</th></tr>")
+        append(f"<tr><th>Motivo</th><th>Ficheros</th>"
+               f"<th style='width:{PCT_CELL_WIDTH}px;'>% Ficheros</th>"
+               f"<th>Casos</th><th style='width:{PCT_CELL_WIDTH}px;'>% de warnings</th></tr>")
+        
+        # Calcular totales para porcentajes
+        all_warning_files = set()
+        for fp_list in warning_reason_files.values():
+            for fp, _ in fp_list:
+                all_warning_files.add(fp)
+        total_warning_files = len(all_warning_files)
+        total_warning_cases = sum(warning_reasons.values())
+        
         for reason, count in sorted(warning_reasons.items(), key=lambda x: -x[1]):
-            files = warning_reason_files.get(reason, [])
-            append(f"<tr><td>{html_module.escape(reason)}</td>"
+            files_for_reason = set(fp for fp, _ in warning_reason_files.get(reason, []))
+            num_files = len(files_for_reason)
+            
+            pct_files = percentage(num_files, total_warning_files)
+            pct_cases = percentage(count, total_warning_cases)
+            
+            bar_files = bar_width(num_files, total_warning_files, max_width=PCT_CELL_WIDTH - 50)
+            bar_cases = bar_width(count, total_warning_cases, max_width=PCT_CELL_WIDTH - 50)
+            
+            append(f"<tr><td>WARNING: {html_module.escape(reason)}</td>"
+                   f"<td class='num'>{num_files}</td>"
+                   f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+                   f"<span style='flex:none'>{pct_files}</span>"
+                   f"<div class='bar'><div class='bar-inner bar-warnings' style='width:{bar_files}px'></div></div>"
+                   f"</td>"
                    f"<td class='num'>{count}</td>"
-                   f"<td><details><summary>{len(set(f[0] for f in files))} fichero(s)</summary><ul>")
-            for file_path, line in files[:50]:
-                append(f"<li>{html_module.escape(file_path)}:{line}</li>")
-            if len(files) > 50:
-                append(f"<li>... y {len(files) - 50} más</li>")
-            append("</ul></details></td></tr>")
+                   f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
+                   f"<span style='flex:none'>{pct_cases}</span>"
+                   f"<div class='bar'><div class='bar-inner bar-warnings' style='width:{bar_cases}px'></div></div>"
+                   f"</td></tr>")
         append("</table>")
     
     # ============================
