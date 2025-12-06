@@ -65,29 +65,81 @@ Sistema unificado para análisis y corrección automática de warnings/errores d
 
 ---
 
-### report.py (582 líneas) 📊 HTML Reports
-**Generación de reportes HTML para analyzer y autofix.**
+### report.py (1289 líneas) 📊 HTML Reports
+**Generación modular de 7 reportes HTML interconectados.**
 
-#### Sección Autofix:
-- `generate_html_report()`: Reporte detallado de correcciones
-  - Resumen global (corregidos vs saltados)
-  - Desglose por motivo (errors y warnings)
-  - Detalle por archivo con diffs coloreados
-  - Estadísticas de líneas añadidas/eliminadas
+#### Analyzer Section (3 generadores):
+- `generate_analyzer_html()`: Resumen simplificado (41K)
+  - Tabla de estadísticas global
+  - Rankings de errores/warnings
+  - Links a detail-reason.html
+  
+- `generate_detail_reason_html()`: Detalles por tipo (21K)
+  - Headers h4 por motivo (ERROR/WARNING)
+  - Lista de ficheros y líneas
+  - Links a detail-file.html
+  
+- `generate_detail_file_html()`: Detalles por fichero (64K)
+  - Secciones `<details>` expandibles
+  - Auto-expand con hash navigation
+  - Colorización (ERROR rojo, WARNING naranja, + verde, # gris)
 
-- `summarize_results()`: Salida consola con estadísticas
+#### Autofix Section (3 generadores NEW):
+- `generate_autofix_html()`: Resumen simplificado (9K)
+  - **Executive summary boxes**: Tasa de éxito + ficheros procesados
+  - Tabla de estadísticas global
+  - Links a detail pages
+  - CSS: `.exec-summary`, `.exec-box` (grid responsivo)
+  
+- `generate_autofix_detail_reason_html()`: Detalles por tipo (3.8K)
+  - **Fix-type cards**: Contadores visuales por tipo
+  - Headers h4 por tipo de fix
+  - List de ficheros
+  - CSS: `.fix-type-count`, `.fix-type-card`
+  
+- `generate_autofix_detail_file_html()`: Detalles por fichero (18K)
+  - **File-summary grid**: Quick-access cards por fichero
+  - Secciones `<details>` expandibles
+  - Badges FIXED (verde) / SKIPPED (gris)
+  - CSS: `.file-summary`, `.file-summary-card`
 
-#### Sección Analyzer:
-- `generate_analyzer_html()`: Reporte de análisis inicial
-  - Resumen global (correct, warnings, errors)
-  - Resumen por motivo con lista de archivos
-  - Resumen por funcionalidad (drivers, fs, net, etc.)
+#### Dashboard:
+- `generate_dashboard_html()`: Hub central (6.6K)
+  - 2 tabs: Analyzer, Autofix
+  - Breadcrumb dinámico (6 rutas totales)
+  - Iframe viewer
+  - Link hijacking JavaScript
+  - Auto-expand en hash navigation
 
 **Características HTML:**
 - CSS unificado (COMMON_CSS)
+- 7 HTML modularizados (1 dashboard + 6 reportes)
+- Grid responsivo para summaries
+- Secciones `<details>` expandibles
 - Barras de progreso visuales
-- Diffs coloreados (+verde, -rojo)
-- Tablas expandibles con <details>
+- Colorización consistente
+- Auto-scroll a anchors
+- Cross-linking entre páginas
+
+---
+
+### dashboard.js Integration
+Todos los reportes son **independientes** pero **conectados**:
+
+**Routes system (6 rutas):**
+```
+analyzer (41K) → detail-reason (21K) → detail-file (64K)
+autofix (9K) → autofix-detail-reason (3.8K) → autofix-detail-file (18K)
+```
+
+**Navigation flow:**
+1. Dashboard.html carga url según route
+2. Iframe muestra HTML especificado
+3. Links internos se interceptan (hijacking)
+4. Breadcrumb se actualiza
+5. Hash (#id_*) dispara auto-expand JavaScript
+
+**Ver:** `HTML_REPORTS.md` para arquitectura detallada
 
 ---
 

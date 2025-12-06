@@ -26,7 +26,13 @@ from engine import (
 from report import (
     generate_html_report, 
     summarize_results,
-    generate_analyzer_html
+    generate_analyzer_html,
+    generate_detail_reason_html,
+    generate_detail_file_html,
+    generate_dashboard_html,
+    generate_autofix_html,
+    generate_autofix_detail_reason_html,
+    generate_autofix_detail_file_html
 )
 from utils import find_source_files
 
@@ -101,6 +107,16 @@ def analyze_mode(args):
     html_path = Path(args.html)
     html_path.parent.mkdir(parents=True, exist_ok=True)
     generate_analyzer_html(analysis_data, html_path)
+    
+    # Generar HTMLs de detalle
+    detail_reason_path = html_path.parent / "detail-reason.html"
+    detail_file_path = html_path.parent / "detail-file.html"
+    generate_detail_reason_html(analysis_data, detail_reason_path)
+    generate_detail_file_html(analysis_data, detail_file_path)
+    
+    # Generar dashboard
+    dashboard_path = html_path.parent / "dashboard.html"
+    generate_dashboard_html(dashboard_path)
     
     # Generar JSON
     json_path = Path(args.json_out)
@@ -213,7 +229,15 @@ def fix_mode(args):
     # Generar HTML
     html_path = Path(args.html)
     html_path.parent.mkdir(parents=True, exist_ok=True)
-    generate_html_report(report_data, html_path)
+    
+    # Generar 3 archivos de autofix
+    generate_autofix_html(report_data, html_path)
+    generate_autofix_detail_reason_html(report_data, html_path.parent / "autofix-detail-reason.html")
+    generate_autofix_detail_file_html(report_data, html_path.parent / "autofix-detail-file.html")
+    
+    # Generar dashboard
+    dashboard_path = html_path.parent / "dashboard.html"
+    generate_dashboard_html(dashboard_path)
     
     # Guardar JSON de resultados
     json_out_path = Path(args.json_out)

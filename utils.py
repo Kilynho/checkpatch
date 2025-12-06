@@ -44,7 +44,7 @@ h3.warnings, h4.warnings { color: #f57c00; background: #fff3e0; padding: 10px; b
 .skipped { color: #757575; font-weight: bold; }
 details { margin-bottom: 8px; }
 pre { background: #f4f4f4; padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
-.bar { display: inline-block; height: 12px; background: #ddd; border-radius: 3px; width: 100%; }
+.bar { display: inline-block; height: 12px; background: #ddd; border-radius: 3px; width: 100%; overflow: hidden; }
 .bar-inner { height: 100%; border-radius: 3px; }
 .bar-errors { background: #e57373; }
 .bar-warnings { background: #ffb74d; }
@@ -255,6 +255,11 @@ def display_path(file_path, base_dir=None):
 def percentage(value, total):
     """Calcula porcentaje."""
     return f"{(value / total * 100):.1f}%" if total > 0 else "0%"
+
+
+def percentage_value(value, total):
+    """Calcula valor numérico de porcentaje (sin %)."""
+    return (value / total * 100) if total > 0 else 0
 
 
 def bar_width(value, total, max_width=200):
