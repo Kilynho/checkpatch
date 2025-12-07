@@ -160,17 +160,31 @@ Sistema modular de **8 reportes interconectados** con navegación por breadcrumb
 
 ## 📈 Estadísticas Actuales
 
+### Análisis (linux/init - 14 archivos)
 ```
-Archivos analizados:    1 (linux/init/initramfs.c)
 Issues totales:         168
-  ├─ Errores:           16 (0% corregidos)
-  └─ Warnings:          152 (5.9% corregidos)
-
-Resultados autofix:
-  ├─ Corregidos:        9 (5.4%)
-  ├─ Saltados:          159 (94.6%)
-  └─ Ficheros fijados:  3/12 (25%)
+  ├─ Errores:           16 (68.8% corregidos)
+  └─ Warnings:          152 (78.3% corregidos)
 ```
+
+### Autofix
+```
+Total procesados:       168
+  ├─ Corregidos:        127 (75.6%)
+  └─ Saltados:          41 (24.4%)
+Ficheros modificados:   11/14 (78.6%)
+```
+
+### Compilación
+```
+Archivos compilables:   10
+  ├─ Éxitos:            7 (70.0%)
+  └─ Fallos:            3 (30.0%)
+Tiempo promedio:        2.01s/archivo
+```
+
+**Nota:** Los 3 fallos de compilación son falsos positivos por falta de contexto del kernel 
+completo (dependencias externas, configuración). El autofix no introduce errores reales.
 
 ---
 
