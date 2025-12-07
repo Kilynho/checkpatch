@@ -55,16 +55,26 @@ checkpatch/
 ├── report.py            # Generadores de HTML (8 reportes)
 ├── utils.py             # Utilidades comunes
 ├── constants.py         # Constantes y patterns
-├── test.py              # Tests de integración
-├── test_fixes.py        # Tests unitarios de fixes
-├── test_compile.py      # Tests unitarios de compilación
+├── test_all.py          # Suite unificada de tests
 ├── run                  # Script automatizado
 │
 ├── README.md            # Este archivo
-├── ARCHITECTURE.md      # Arquitectura detallada
-├── CHANGELOG.md         # Historial de cambios
-├── HTML_REPORTS.md      # Estructura de reportes
-├── QUICK_REFERENCE.md   # Guía rápida
+├── TESTING.md           # Guía de testing
+│
+├── documentation/       # Documentación completa
+│   ├── INDEX.md                 # Índice
+│   ├── ARCHITECTURE.md          # Arquitectura detallada
+│   ├── CHANGELOG.md             # Historial de cambios
+│   ├── HTML_REPORTS.md          # Estructura de reportes
+│   ├── QUICK_REFERENCE.md       # Guía rápida
+│   ├── COMPILE.md               # Sistema de compilación
+│   ├── COMPILATION_TROUBLESHOOTING.md
+│   ├── FIXES_STATUS.md          # Estado de fixes
+│   ├── TEST_SUMMARY.md          # Resumen de tests
+│   └── ...
+│
+├── scripts/             # Scripts de utilidad
+│   └── review_and_test.py       # Suite unificada: tests + análisis cobertura
 │
 ├── html/                # Reportes generados
 │   ├── dashboard.html           # Hub principal
@@ -251,23 +261,28 @@ Características:
 - Puede restaurar backups antes/después de compilar
 - Muestra errores de compilación detallados
 
-### Tests
+### Tests y Análisis
 ```bash
-# Tests de integración (requiere kernel Linux)
-./test.py                          # Ejecuta test de integración completo
+# Suite unificada de tests (12 tests: compilation + fixes + integration)
+python3 scripts/review_and_test.py              # Ejecutar tests (por defecto)
+python3 scripts/review_and_test.py --coverage   # Análisis cobertura teórica
+python3 scripts/review_and_test.py --real       # Análisis cobertura real
+python3 scripts/review_and_test.py --all        # Ejecutar todo
 
-# Tests unitarios (no requiere dependencias externas)
-./test_fixes.py                    # Tests de fixes (32 tests)
-./test_compile.py                  # Tests de compilación (10 tests)
-./test_compile.py -v               # Ejecuta con salida detallada
-
-# Test específico
-python3 -m unittest test_fixes.TestFixFunctions.test_fix_indent_tabs
-python3 -m unittest test_compile.TestCompilationResult.test_compilation_result_success
+# Tests específicos con unittest
+python3 -m unittest scripts.review_and_test.TestFixFunctions.test_fix_indent_tabs
+python3 -m unittest scripts.review_and_test.TestCompilation.test_compilation_result_success
+python3 -m unittest scripts.review_and_test.TestIntegration.test_full_integration
 ```
 
-Los tests unitarios se ejecutan automáticamente en CI/CD con GitHub Actions en cada push.
-Ver `TESTING.md` para documentación completa sobre cómo agregar tests para nuevos fixes.
+**Contenido del script unificado:**
+- **Tests de compilación** (6 tests): Verifican resultados, JSON, backups
+- **Tests de fixes** (5 tests): Validan funciones individuales de fix
+- **Test de integración** (1 test): Flujo completo end-to-end
+- **Análisis de cobertura teórica**: 4/225 tipos checkpatch (1.8%)
+- **Análisis de cobertura real**: 28/31 tipos encontrados (90.3%)
+
+Ver `TESTING.md` para documentación completa sobre la suite unificada.
 
 ### Script Automatizado
 ```bash
