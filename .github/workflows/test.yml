@@ -33,4 +33,4 @@ jobs:
 
     - name: Test summary
       if: success()
-      run: echo "✅ All unit tests and scripts passed successfully!"
+      run: echo "All unit tests passed successfully - tests updated"
