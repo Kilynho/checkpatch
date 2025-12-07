@@ -29,7 +29,8 @@ AUTO_FIX_RULES = {
     "spaces required around that '='": SPACES_AROUND_EQUALS,
     "code indent should use tabs where possible": fix_indent_tabs,
     "trailing whitespace": fix_trailing_whitespace,
-    "do not use assignment in if condition": fix_assignment_in_if,
+    # TODO: PROBLEMATIC - Breaks } else if chains, leaves orphaned else statements
+    # "do not use assignment in if condition": fix_assignment_in_if,
     "Use of const init definition must use __initconst": fix_initconst,
     "space prohibited after that open parenthesis '('": SPACE_AFTER_OPEN_PAREN,
     "space before tabs": SPACE_BEFORE_TABS,
