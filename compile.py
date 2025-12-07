@@ -22,13 +22,15 @@ class CompilationResult:
     """Representa el resultado de compilar un archivo."""
     
     def __init__(self, file_path: str, success: bool, duration: float, 
-                 stdout: str = "", stderr: str = "", error_message: str = ""):
+                 stdout: str = "", stderr: str = "", error_message: str = "",
+                 error_type: str = ""):
         self.file_path = file_path
         self.success = success
         self.duration = duration
         self.stdout = stdout
         self.stderr = stderr
         self.error_message = error_message
+        self.error_type = error_type  # 'config', 'code', 'dependency', 'unknown'
     
     def to_dict(self) -> dict:
         """Convierte el resultado a un diccionario para JSON."""
@@ -38,8 +40,97 @@ class CompilationResult:
             "duration": self.duration,
             "stdout": self.stdout,
             "stderr": self.stderr,
-            "error_message": self.error_message
+            "error_message": self.error_message,
+            "error_type": self.error_type
         }
+
+
+def ensure_kernel_configured(kernel_root: Path) -> bool:
+    """
+    Verifica que el kernel esté configurado y lo configura si es necesario.
+    
+    Args:
+        kernel_root: Directorio raíz del kernel
+        
+    Returns:
+        True si el kernel está configurado correctamente
+    """
+    config_file = kernel_root / ".config"
+    
+    # Si ya existe .config, asumir que está configurado
+    if config_file.exists():
+        return True
+    
+    print("[COMPILE] Kernel not configured. Running 'make defconfig'...")
+    try:
+        result = subprocess.run(
+            ['make', 'defconfig'],
+            cwd=str(kernel_root),
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode == 0 and config_file.exists():
+            print("[COMPILE] ✓ Kernel configured successfully")
+            return True
+        else:
+            print(f"[COMPILE] ✗ Failed to configure kernel: {result.stderr[:200]}")
+            return False
+            
+    except Exception as e:
+        print(f"[COMPILE] ✗ Exception while configuring kernel: {e}")
+        return False
+
+
+def classify_compilation_error(error_msg: str, stderr: str) -> str:
+    """
+    Clasifica el tipo de error de compilación para ayudar al diagnóstico.
+    
+    Returns:
+        Clasificación del error: 'config', 'code', 'dependency', 'unknown'
+    """
+    error_lower = (error_msg + "\n" + stderr).lower()
+    
+    # Errores de configuración del kernel (CONFIG_* no definido)
+    config_indicators = [
+        'undeclared',
+        'not declared in this scope',
+        'was not declared',
+        'implicit declaration',
+        'redefinition',  # A veces por #ifdef CONFIG_
+    ]
+    
+    # Errores de dependencia/header faltante
+    dependency_indicators = [
+        'no such file or directory',
+        'cannot find',
+        '#include',
+    ]
+    
+    # Errores de código real (sintaxis, tipos, etc.)
+    code_indicators = [
+        'syntax error',
+        'expected',
+        'conflicting types',
+        'incompatible',
+        'invalid',
+    ]
+    
+    # Clasificar
+    for indicator in dependency_indicators:
+        if indicator in error_lower:
+            return 'dependency'
+    
+    for indicator in config_indicators:
+        if indicator in error_lower:
+            return 'config'
+    
+    for indicator in code_indicators:
+        if indicator in error_lower:
+            return 'code'
+    
+    return 'unknown'
 
 
 def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult:
@@ -74,6 +165,7 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
         
         success = result.returncode == 0
         error_msg = ""
+        error_type = ""
         
         if not success:
             # Extraer mensaje de error más relevante
@@ -84,6 +176,9 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
                 error_msg = '\n'.join(error_msgs[:5])  # Primeros 5 errores
             else:
                 error_msg = result.stderr[:500]  # Primeros 500 chars si no hay errores explícitos
+            
+            # Clasificar el tipo de error
+            error_type = classify_compilation_error(error_msg, result.stderr)
         
         return CompilationResult(
             file_path=str(file_path),
@@ -91,7 +186,8 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
             duration=duration,
             stdout=result.stdout,
             stderr=result.stderr,
-            error_message=error_msg
+            error_message=error_msg,
+            error_type=error_type
         )
         
     except subprocess.TimeoutExpired:
@@ -155,6 +251,11 @@ def compile_modified_files(files: List[Path], kernel_root: Path,
         Lista de CompilationResult con los resultados
     """
     results = []
+    
+    # Verificar/configurar el kernel antes de compilar
+    if not ensure_kernel_configured(kernel_root):
+        print("[COMPILE] ✗ Cannot compile without kernel configuration")
+        return results
     
     print(f"[COMPILE] Compilando {len(files)} archivos...")
     
@@ -224,13 +325,20 @@ def summarize_results(results: List[CompilationResult]) -> Dict:
     total_duration = sum(r.duration for r in results)
     avg_duration = total_duration / total if total > 0 else 0
     
+    # Clasificar errores por tipo
+    error_types = {}
+    for r in results:
+        if not r.success and r.error_type:
+            error_types[r.error_type] = error_types.get(r.error_type, 0) + 1
+    
     return {
         "total": total,
         "successful": successful,
         "failed": failed,
         "success_rate": (successful / total * 100) if total > 0 else 0,
         "total_duration": total_duration,
-        "avg_duration": avg_duration
+        "avg_duration": avg_duration,
+        "error_types": error_types
     }
 
 
@@ -253,11 +361,25 @@ def print_summary(results: List[CompilationResult]):
     print(f"Tiempo promedio:       {summary['avg_duration']:.2f}s")
     print("="*60)
     
+    # Mostrar clasificación de errores si hay fallos
+    if summary.get('error_types'):
+        print("\nClasificación de errores:")
+        error_labels = {
+            'config': 'Config/Context (símbolos no declarados por CONFIG_*)',
+            'dependency': 'Dependencies (headers/archivos faltantes)',
+            'code': 'Código (sintaxis, tipos, etc.)',
+            'unknown': 'Desconocido'
+        }
+        for error_type, count in summary['error_types'].items():
+            label = error_labels.get(error_type, error_type)
+            print(f"  • {label}: {count}")
+    
     if summary['failed'] > 0:
         print("\nArchivos con errores de compilación:")
         for result in results:
             if not result.success:
-                print(f"  ✗ {Path(result.file_path).name}")
+                error_type_label = f" [{result.error_type}]" if result.error_type else ""
+                print(f"  ✗ {Path(result.file_path).name}{error_type_label}")
                 if result.error_message:
                     # Mostrar primera línea de error
                     first_line = result.error_message.split('\n')[0]
