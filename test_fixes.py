@@ -53,6 +53,13 @@ from core import (
     fix_logging_continuation,
     fix_spaces_at_start_of_line,
     fix_filename_in_file,
+    fix_function_macro,
+    fix_space_before_open_brace,
+    fix_else_after_close_brace,
+    fix_sizeof_struct,
+    fix_consecutive_strings,
+    fix_comparison_to_null,
+    fix_constant_comparison,
 )
 
 
@@ -440,6 +447,93 @@ class TestFixFunctions(unittest.TestCase):
         
         fixed_content = self.read_file(test_file)
         self.assertIn("pr_notice", fixed_content)
+    
+    # Test 31: __FUNCTION__ to __func__
+    def test_fix_function_macro(self):
+        """Test fix_function_macro converts __FUNCTION__ to __func__."""
+        content = 'printk("%s\\n", __FUNCTION__);\n'
+        test_file = self.create_test_file(content)
+        
+        result = fix_function_macro(test_file, 1)
+        self.assertTrue(result, "Should convert __FUNCTION__ to __func__")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn("__func__", fixed_content)
+        self.assertNotIn("__FUNCTION__", fixed_content)
+    
+    # Test 32: Space before open brace
+    def test_fix_space_before_open_brace(self):
+        """Test fix_space_before_open_brace adds space before '{'."""
+        content = "if (x){\n    foo();\n}\n"
+        test_file = self.create_test_file(content)
+        
+        result = fix_space_before_open_brace(test_file, 1)
+        self.assertTrue(result, "Should add space before '{'")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn("if (x) {", fixed_content)
+    
+    # Test 33: Else after close brace
+    def test_fix_else_after_close_brace(self):
+        """Test fix_else_after_close_brace moves else to same line as '}'."""
+        content = "if (x) {\n    foo();\n}\nelse {\n    bar();\n}\n"
+        test_file = self.create_test_file(content)
+        
+        result = fix_else_after_close_brace(test_file, 4)
+        self.assertTrue(result, "Should move else to same line")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn("} else", fixed_content)
+    
+    # Test 34: sizeof struct to sizeof pointer
+    def test_fix_sizeof_struct(self):
+        """Test fix_sizeof_struct converts sizeof(struct type) to sizeof(*p)."""
+        content = "p = kmalloc(sizeof(struct foo));\n"
+        test_file = self.create_test_file(content)
+        
+        result = fix_sizeof_struct(test_file, 1)
+        self.assertTrue(result, "Should convert to sizeof(*p)")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn("sizeof(*p)", fixed_content)
+        self.assertNotIn("sizeof(struct", fixed_content)
+    
+    # Test 35: Consecutive strings
+    def test_fix_consecutive_strings(self):
+        """Test fix_consecutive_strings merges consecutive string literals."""
+        content = 'printk("Hello " "World\\n");\n'
+        test_file = self.create_test_file(content)
+        
+        result = fix_consecutive_strings(test_file, 1)
+        self.assertTrue(result, "Should merge consecutive strings")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn('"Hello World\\n"', fixed_content)
+        self.assertEqual(fixed_content.count('"'), 2)  # Only one string, so 2 quotes
+    
+    # Test 36: Comparison to NULL
+    def test_fix_comparison_to_null(self):
+        """Test fix_comparison_to_null converts NULL comparisons."""
+        content = "if (ptr == NULL) {\n    return;\n}\n"
+        test_file = self.create_test_file(content)
+        
+        result = fix_comparison_to_null(test_file, 1)
+        self.assertTrue(result, "Should convert to !ptr")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn("if (!ptr)", fixed_content)
+    
+    # Test 37: Constant comparison order
+    def test_fix_constant_comparison(self):
+        """Test fix_constant_comparison swaps constant to right side."""
+        content = "if (5 == x) {\n    foo();\n}\n"
+        test_file = self.create_test_file(content)
+        
+        result = fix_constant_comparison(test_file, 1)
+        self.assertTrue(result, "Should swap to x == 5")
+        
+        fixed_content = self.read_file(test_file)
+        self.assertIn("x == 5", fixed_content)
 
 
 class TestFixFunctionsIntegration(unittest.TestCase):
