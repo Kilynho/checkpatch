@@ -143,7 +143,7 @@ See `TESTING.md` for complete details.
 | fix_printk_info | ✅ Tested | printk(KERN_INFO) → pr_info |
 | fix_printk_err | ✅ Tested | printk(KERN_ERR) → pr_err |
 | fix_printk_warn | ✅ Tested | printk(KERN_WARNING) → pr_warn |
-| fix_printk_debug | ✅ Tested | printk(KERN_DEBUG) → pr_debug |
+| fix_printk_debug | ⏸️ Imported | Not tested (rarely used) |
 | fix_printk_emerg | ✅ Tested | printk(KERN_EMERG) → pr_emerg |
 | fix_jiffies_comparison | ✅ Tested | jiffies != → time_after |
 | fix_else_after_return | ✅ Tested | Removes else after return |
@@ -158,7 +158,20 @@ See `TESTING.md` for complete details.
 | fix_spaces_at_start_of_line | ✅ Tested | Removes leading spaces |
 | fix_filename_in_file | ✅ Tested | Removes filename comments |
 
-**Total: 30+ fixes covered by 32 tests**
+**Total: 30 fixes tested, 8 imported but not tested (see notes below)**
+
+### Untested Imports (with reasons):
+
+- `fix_char_array_static_const` - Marked as PROBLEMATIC in engine.py
+- `fix_printk_debug` - Rarely used, same pattern as other printk fixes
+- `fix_printk_kern_level` - Marked as PROBLEMATIC in engine.py  
+- `fix_func_name_in_string` - Marked as PROBLEMATIC in engine.py
+- `fix_kmalloc_no_flag` - Complex pattern, needs specific context
+- `fix_memcpy_literal` - Less common pattern
+- `fix_of_read_no_check` - Device tree specific
+- `fix_logging_continuation` - Complex multi-line handling
+
+These functions are imported for completeness but either have known issues or are rarely triggered.
 
 ## Files Added/Modified
 

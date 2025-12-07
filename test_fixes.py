@@ -494,7 +494,10 @@ printk(KERN_WARNING "warning\\n");
         
         fixed_content = self.read_file(test_file)
         self.assertIn("\t", fixed_content)
-        self.assertFalse(fixed_content.rstrip() != fixed_content.rstrip('\n'))
+        # Check that there's no trailing whitespace (other than newline)
+        lines = fixed_content.split('\n')
+        for line in lines[:-1]:  # Skip last empty line
+            self.assertEqual(line.rstrip(), line, "Line should not have trailing whitespace")
 
 
 def run_tests():
