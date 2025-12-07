@@ -1582,7 +1582,8 @@ def generate_compile_html(results, html_file, kernel_root=None):
         margin: 0 5px;
     }
     .breadcrumb a:hover { text-decoration: underline; }
-    </style>")
+    """)
+    append("</style>")
     append("</head><body>")
     
     # Breadcrumb
