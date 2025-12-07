@@ -51,6 +51,7 @@ checkpatch/
 ├── core.py              # Implementaciones de fixes (40+)
 ├── compile.py           # Módulo de compilación de archivos
 ├── report.py            # Generadores de HTML (8 reportes)
+├── logger.py            # Sistema de logging unificado ⭐ NUEVO
 ├── utils.py             # Utilidades comunes
 ├── constants.py         # Constantes y patterns
 ├── test_all.py          # Suite unificada de tests
@@ -168,6 +169,13 @@ Sistema modular de **8 reportes interconectados** con navegación por breadcrumb
 - Auto-scroll a anchors
 - Sin dependencias externas
 
+### ✅ Sistema de Logging
+- Niveles configurables (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Salida colorizada por nivel de severidad
+- Archivo de log opcional con timestamps
+- Compatible con formato existente de mensajes
+- Útil para debugging y análisis de problemas
+
 ---
 
 ## 📈 Estadísticas Actuales
@@ -258,6 +266,40 @@ Características:
 - No deja archivos .o en el kernel (limpieza automática)
 - Puede restaurar backups antes/después de compilar
 - Muestra errores de compilación detallados
+
+### Logging y Debug ⭐ NUEVO
+```bash
+# Nivel de debug (muestra mensajes DEBUG adicionales)
+./main.py --analyze /path/to/kernel --log-level DEBUG
+
+# Nivel INFO (default, mensajes informativos)
+./main.py --fix --json-input json/checkpatch.json --log-level INFO
+
+# Nivel WARNING (solo warnings y errores)
+./main.py --fix --json-input json/checkpatch.json --log-level WARNING
+
+# Guardar log en archivo
+./main.py --analyze /path/to/kernel --log-file logs/checkpatch.log
+
+# Desactivar colores (útil para redireccionar output)
+./main.py --fix --json-input json/checkpatch.json --no-color
+
+# Combinación: DEBUG + archivo + sin colores
+./main.py --analyze /path/to/kernel --log-level DEBUG --log-file logs/debug.log --no-color
+```
+
+Niveles de logging disponibles:
+- `DEBUG` - Mensajes de debugging detallados (argumentos, archivos procesados, etc.)
+- `INFO` - Mensajes informativos (default) - progreso, resultados, archivos modificados
+- `WARNING` - Solo advertencias y errores
+- `ERROR` - Solo errores críticos
+- `CRITICAL` - Solo errores críticos del sistema
+
+Características:
+- Salida colorizada por nivel (rojo=ERROR, amarillo=WARNING, cyan=INFO, gris=DEBUG)
+- Archivo de log con timestamps completos (guarda todos los niveles incluido DEBUG)
+- Compatible con el formato de mensajes existente `[ANALYZER]`, `[AUTOFIX]`, `[COMPILE]`
+- El archivo de log siempre captura nivel DEBUG, independiente del nivel de consola
 
 ### Tests y Análisis
 ```bash
