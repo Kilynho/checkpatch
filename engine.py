@@ -71,6 +71,13 @@ AUTO_FIX_RULES = {
     "Avoid logging continuation uses where feasible": fix_logging_continuation,
     "It's generally not useful to have the filename in the file": fix_filename_in_file,
     "please, no spaces at the start of a line": fix_spaces_at_start_of_line,
+    "__FUNCTION__ is gcc specific, use __func__": fix_function_macro,
+    "space required before the open brace '{'": fix_space_before_open_brace,
+    "else should follow close brace '}'": fix_else_after_close_brace,
+    "Prefer sizeof(*p) over sizeof(struct type)": fix_sizeof_struct,
+    "Consecutive strings are generally better as a single string": fix_consecutive_strings,
+    "Comparison to NULL could be written": fix_comparison_to_null,
+    "Comparisons should place the constant on the right side": fix_constant_comparison,
 }
 
 def apply_fixes(file_path, issues):

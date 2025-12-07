@@ -897,3 +897,173 @@ def fix_filename_in_file(file_path, line_number):
         return False
     return apply_lines_callback(file_path, line_number, callback)
 
+
+def fix_function_macro(file_path, line_number):
+    """Fix: __FUNCTION__ is gcc specific, use __func__
+    Converts __FUNCTION__ to __func__ (C99 standard)
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        if '__FUNCTION__' in line:
+            lines[idx] = line.replace('__FUNCTION__', '__func__')
+            return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_space_before_open_brace(file_path, line_number):
+    """Fix: space required before the open brace '{'
+    Adds space before '{' when missing
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        # Look for patterns like: if(...){ or for(...){ or while(...){
+        # Also: ){, ]{, etc.
+        pattern = r'(\w|\)|\])\{'
+        if re.search(pattern, line):
+            lines[idx] = re.sub(pattern, r'\1 {', line)
+            return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_else_after_close_brace(file_path, line_number):
+    """Fix: else should follow close brace '}'
+    Moves else to same line as closing brace
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        # Check if current line is 'else' and previous line ends with '}'
+        line = lines[idx].strip()
+        if line.startswith('else') and idx > 0:
+            prev_line = lines[idx - 1].rstrip()
+            if prev_line.endswith('}'):
+                # Merge: previous line + ' ' + current line
+                lines[idx - 1] = prev_line + ' ' + line + '\n'
+                # Remove current line
+                del lines[idx]
+                return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_sizeof_struct(file_path, line_number):
+    """Fix: Prefer sizeof(*p) over sizeof(struct type)
+    Converts sizeof(struct foo) to sizeof(*p) when variable is present
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        # Look for patterns like: malloc(sizeof(struct foo))
+        # This is complex to do perfectly, so we do a simple version:
+        # sizeof(struct \w+) where there's a pointer variable nearby
+        # This is a simplified fix - only works in obvious cases
+        # Pattern: variable = malloc(sizeof(struct type))
+        pattern = r'(\w+)\s*=\s*(\w*alloc\w*)\s*\(\s*sizeof\s*\(\s*struct\s+\w+\s*\)\s*\)'
+        match = re.search(pattern, line)
+        if match:
+            var_name = match.group(1)
+            alloc_func = match.group(2)
+            # Replace with: variable = malloc(sizeof(*variable))
+            new_expr = f'{var_name} = {alloc_func}(sizeof(*{var_name}))'
+            lines[idx] = re.sub(pattern, new_expr, line)
+            return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_consecutive_strings(file_path, line_number):
+    """Fix: Consecutive strings are generally better as a single string
+    Merges consecutive string literals on the same line
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        # Look for pattern: "string1" "string2"
+        # Match two or more adjacent string literals
+        pattern = r'"([^"]*?)"\s+"([^"]*?)"'
+        if re.search(pattern, line):
+            # Merge consecutive strings - keep replacing until no more matches
+            # This handles multiple consecutive strings like "a" "b" "c"
+            prev_line = None
+            while prev_line != line and re.search(pattern, line):
+                prev_line = line
+                line = re.sub(pattern, r'"\1\2"', line)
+            lines[idx] = line
+            return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_comparison_to_null(file_path, line_number):
+    """Fix: Comparisons to NULL could be written as !variable or variable
+    Converts (variable == NULL) to (!variable) and (variable != NULL) to (variable)
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        # Pattern: variable == NULL or NULL == variable
+        if '== NULL' in line or 'NULL ==' in line:
+            # Replace: (variable == NULL) or (NULL == variable) with (!variable)
+            line = re.sub(r'\(\s*(\w+)\s*==\s*NULL\s*\)', r'(!\1)', line)
+            line = re.sub(r'\(\s*NULL\s*==\s*(\w+)\s*\)', r'(!\1)', line)
+            # Also handle without explicit parens in if conditions
+            line = re.sub(r'\bif\s*\(\s*(\w+)\s*==\s*NULL\s*\)', r'if (!\1)', line)
+            line = re.sub(r'\bif\s*\(\s*NULL\s*==\s*(\w+)\s*\)', r'if (!\1)', line)
+            lines[idx] = line
+            return True
+        
+        if '!= NULL' in line or 'NULL !=' in line:
+            # Replace: (variable != NULL) with (variable)
+            line = re.sub(r'\(\s*(\w+)\s*!=\s*NULL\s*\)', r'(\1)', line)
+            line = re.sub(r'\(\s*NULL\s*!=\s*(\w+)\s*\)', r'(\1)', line)
+            # Also handle in if conditions
+            line = re.sub(r'\bif\s*\(\s*(\w+)\s*!=\s*NULL\s*\)', r'if (\1)', line)
+            line = re.sub(r'\bif\s*\(\s*NULL\s*!=\s*(\w+)\s*\)', r'if (\1)', line)
+            lines[idx] = line
+            return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
+
+def fix_constant_comparison(file_path, line_number):
+    """Fix: Comparisons should place the constant on the right side
+    Converts (5 == x) to (x == 5)
+    """
+    def callback(lines, idx):
+        if idx < 0 or idx >= len(lines):
+            return False
+        
+        line = lines[idx]
+        # Look for pattern: (constant comparison variable)
+        # This is a simplified version for numeric constants
+        pattern = r'(\()\s*(\d+)\s*(==|!=|<=|>=|<|>)\s*(\w+)'
+        if re.search(pattern, line):
+            # Swap constant and variable
+            line = re.sub(pattern, r'\1\4 \3 \2', line)
+            lines[idx] = line
+            return True
+        
+        return False
+    
+    return apply_lines_callback(file_path, line_number, callback)
