@@ -95,7 +95,22 @@ FIXES_STATUS.md             [~150 líneas]   ← Referencia
 
 FALSOS_POSITIVOS...md       [~100 líneas]   ← Análisis
 └─ False positives encontrados
+
+COMPILATION_TROUBLESHOOTING.md  [~250 líneas]   ← Compilación
+├─ Error classification
+├─ Common errors & solutions
+├─ Kernel configuration
+└─ Bug reporting
 ```
+
+#### 🔧 Troubleshooter (errores de compilación)
+1. **START HERE:** [COMPILATION_TROUBLESHOOTING.md](COMPILATION_TROUBLESHOOTING.md)
+2. **Check:** Clasificación de errores en consola/JSON
+3. **Fix:**
+   - `[config]` → Problema de configuración kernel
+   - `[code]` → Bug real (verificar diff)
+   - `[dependency]` → Headers/includes faltantes
+4. **Verify:** Compilar archivo original sin modificaciones
 
 ### Python (7 módulos, ~2000 líneas)
 ```
