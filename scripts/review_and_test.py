@@ -56,11 +56,12 @@ def report(results):
     print("==== RESULTADOS DE LA REVISIÓN ====")
     for section, items in results.items():
         print(f"\n*** {section.upper()} ***")
-        for item in items:
-            if item['issues']:
-                print(f"{item['file']} 0 {item['issues']}")
-    print("\n==== RESULTADO TESTS ====")
-    print(json.dumps(results['tests'], indent=2))
+        if section == 'tests':
+            print(json.dumps(items, indent=2))
+        else:
+            for item in items:
+                if item['issues']:
+                    print(f"{item['file']} → {item['issues']}")
 
 if __name__ == '__main__':
     results = {}
