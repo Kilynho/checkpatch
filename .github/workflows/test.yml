@@ -1,0 +1,35 @@
+name: Run Unit Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Display Python version
+      run: python --version
+    
+    - name: Run unit tests for fix functions
+      run: |
+        cd ${{ github.workspace }}
+        python3 test_fixes.py
+    
+    - name: Test summary
+      if: success()
+      run: |
+        echo "✅ All unit tests passed successfully!"
+        python3 test_fixes.py -v 2>&1 | grep -E "^test_|Ran|OK"
