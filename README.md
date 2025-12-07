@@ -1,8 +1,6 @@
 # Checkpatch - Analyzer & Autofix System
 
-**Toda la documentación se encuentra ahora en la carpeta `Documentation/`.**
-
-Consulte los archivos dentro de `Documentation/` para guías, arquitectura, troubleshooting y referencias.
+**Toda la documentación se encuentra en la carpeta `documentation/`** → [📚 Ver documentación](documentation/README.md)
 
 Sistema unificado para análisis y corrección automática de warnings/errores de **checkpatch.pl** (Linux kernel).
 
@@ -62,15 +60,15 @@ checkpatch/
 ├── TESTING.md           # Guía de testing
 │
 ├── documentation/       # Documentación completa
-│   ├── INDEX.md                 # Índice
+│   ├── README.md                # Índice de documentación ⭐
 │   ├── ARCHITECTURE.md          # Arquitectura detallada
 │   ├── CHANGELOG.md             # Historial de cambios
 │   ├── HTML_REPORTS.md          # Estructura de reportes
 │   ├── QUICK_REFERENCE.md       # Guía rápida
-│   ├── COMPILE.md               # Sistema de compilación
 │   ├── COMPILATION_TROUBLESHOOTING.md
-│   ├── FIXES_STATUS.md          # Estado de fixes
-│   ├── TEST_SUMMARY.md          # Resumen de tests
+│   ├── TESTING.md               # Guía de testing
+│   ├── FALSOS_POSITIVOS_ANALISIS.md
+│   ├── DIAGRAM.md               # Diagramas visuales
 │   └── ...
 │
 ├── scripts/             # Scripts de utilidad
