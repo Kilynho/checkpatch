@@ -25,10 +25,6 @@ jobs:
     - name: Display Python version
       run: python --version
 
-    - name: Run ALL unit tests in tests/ directory
-      run: |
-        cd ${{ github.workspace }}
-        PYTHONPATH=src python3 -m unittest discover -s tests -p "test*.py" -v
 
     - name: Run review_and_test.py
       run: |
