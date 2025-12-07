@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import json
 import time
+import logger
 
 
 class CompilationResult:
@@ -61,7 +62,7 @@ def ensure_kernel_configured(kernel_root: Path) -> bool:
     if config_file.exists():
         return True
     
-    print("[COMPILE] Kernel not configured. Running 'make defconfig'...")
+    logger.info("[COMPILE] Kernel not configured. Running 'make defconfig'...")
     try:
         result = subprocess.run(
             ['make', 'defconfig'],
@@ -72,14 +73,14 @@ def ensure_kernel_configured(kernel_root: Path) -> bool:
         )
         
         if result.returncode == 0 and config_file.exists():
-            print("[COMPILE] ✓ Kernel configured successfully")
+            logger.info("[COMPILE] ✓ Kernel configured successfully")
             return True
         else:
-            print(f"[COMPILE] ✗ Failed to configure kernel: {result.stderr[:200]}")
+            logger.error(f"[COMPILE] ✗ Failed to configure kernel: {result.stderr[:200]}")
             return False
             
     except Exception as e:
-        print(f"[COMPILE] ✗ Exception while configuring kernel: {e}")
+        logger.error(f"[COMPILE] ✗ Exception while configuring kernel: {e}")
         return False
 
 
@@ -222,7 +223,7 @@ def cleanup_compiled_files(kernel_root: Path, compiled_files: List[Path]):
             
             if obj_path.exists():
                 obj_path.unlink()
-                print(f"[CLEANUP] Removed: {obj_path.relative_to(kernel_root)}")
+                logger.debug(f"[CLEANUP] Removed: {obj_path.relative_to(kernel_root)}")
             
             # También limpiar posibles archivos auxiliares (.cmd, .d, etc.)
             cmd_file = obj_path.parent / f".{obj_path.name}.cmd"
@@ -234,7 +235,7 @@ def cleanup_compiled_files(kernel_root: Path, compiled_files: List[Path]):
                 d_file.unlink()
                 
         except Exception as e:
-            print(f"[CLEANUP WARNING] Could not clean {c_file}: {e}")
+            logger.warning(f"[CLEANUP WARNING] Could not clean {c_file}: {e}")
 
 
 def compile_modified_files(files: List[Path], kernel_root: Path, 
