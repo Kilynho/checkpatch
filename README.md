@@ -1,5 +1,9 @@
 # Checkpatch - Analyzer & Autofix System
 
+**Toda la documentación se encuentra ahora en la carpeta `Documentation/`.**
+
+Consulte los archivos dentro de `Documentation/` para guías, arquitectura, troubleshooting y referencias.
+
 Sistema unificado para análisis y corrección automática de warnings/errores de **checkpatch.pl** (Linux kernel).
 
 ## 🚀 Inicio Rápido
