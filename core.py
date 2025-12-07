@@ -948,8 +948,6 @@ def fix_else_after_close_brace(file_path, line_number):
         if line.startswith('else') and idx > 0:
             prev_line = lines[idx - 1].rstrip()
             if prev_line.endswith('}'):
-                # Get indentation of else line
-                else_indent = len(lines[idx]) - len(lines[idx].lstrip())
                 # Merge: previous line + ' ' + current line
                 lines[idx - 1] = prev_line + ' ' + line + '\n'
                 # Remove current line
@@ -1001,8 +999,11 @@ def fix_consecutive_strings(file_path, line_number):
         # Match two or more adjacent string literals
         pattern = r'"([^"]*?)"\s+"([^"]*?)"'
         if re.search(pattern, line):
-            # Merge consecutive strings
-            while re.search(pattern, line):
+            # Merge consecutive strings - keep replacing until no more matches
+            # This handles multiple consecutive strings like "a" "b" "c"
+            prev_line = None
+            while prev_line != line and re.search(pattern, line):
+                prev_line = line
                 line = re.sub(pattern, r'"\1\2"', line)
             lines[idx] = line
             return True
