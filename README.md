@@ -18,7 +18,7 @@ chmod +x main.py test.py run
 
 ```bash
 # 1. Analizar archivos con checkpatch
-./main.py --analyze --source-dir linux/init
+./main.py --analyze /path/to/kernel/linux --paths init
 
 # 2. Ver reporte (abrir en navegador)
 open html/dashboard.html
@@ -26,7 +26,10 @@ open html/dashboard.html
 # 3. Aplicar fixes automáticos
 ./main.py --fix --json-input json/checkpatch.json
 
-# 4. Ver resultados
+# 4. Compilar archivos modificados (verifica que compilen)
+./main.py --compile --json-input json/fixed.json --kernel-root /path/to/kernel/linux --restore-after
+
+# 5. Ver resultados
 open html/dashboard.html  # Se actualizó automáticamente
 ```
 
@@ -41,13 +44,16 @@ O ejecutar todo automáticamente:
 
 ```
 checkpatch/
-├── main.py              # Punto de entrada (--analyze, --fix)
+├── main.py              # Punto de entrada (--analyze, --fix, --compile)
 ├── engine.py            # Lógica análisis y fixes
 ├── core.py              # Implementaciones de fixes (40+)
-├── report.py            # Generadores de HTML (7 reportes)
+├── compile.py           # Módulo de compilación de archivos
+├── report.py            # Generadores de HTML (8 reportes)
 ├── utils.py             # Utilidades comunes
 ├── constants.py         # Constantes y patterns
-├── test.py              # Tests unitarios
+├── test.py              # Tests de integración
+├── test_fixes.py        # Tests unitarios de fixes
+├── test_compile.py      # Tests unitarios de compilación
 ├── run                  # Script automatizado
 │
 ├── README.md            # Este archivo
@@ -63,11 +69,13 @@ checkpatch/
 │   ├── detail-file.html         # Detalles por fichero (analyzer)
 │   ├── autofix.html             # Resumen autofix
 │   ├── autofix-detail-reason.html   # Detalles por tipo (autofix)
-│   └── autofix-detail-file.html     # Detalles por fichero (autofix)
+│   ├── autofix-detail-file.html     # Detalles por fichero (autofix)
+│   └── compile.html             # Reporte de compilación
 │
 ├── json/                # Datos procesados
 │   ├── checkpatch.json  # Issues encontradas
-│   └── fixed.json       # Issues fijadas
+│   ├── fixed.json       # Issues fijadas
+│   └── compile.json     # Resultados de compilación
 │
 └── __pycache__/         # Cache Python (ignorar)
 ```
@@ -76,7 +84,7 @@ checkpatch/
 
 ## 📊 Reportes HTML
 
-Sistema modular de **7 reportes interconectados** con navegación por breadcrumbs:
+Sistema modular de **8 reportes interconectados** con navegación por breadcrumbs:
 
 ### Sección Analyzer (Análisis Inicial)
 
@@ -98,11 +106,23 @@ Sistema modular de **7 reportes interconectados** con navegación por breadcrumb
 
 **Flujo:** autofix → (clic tipo) → autofix-detail-reason → (clic fichero) → autofix-detail-file
 
+### Sección Compile (Verificación de Compilación) ⭐ NUEVO
+
+| Reporte | Propósito |
+|---------|----------|
+| **compile.html** ⭐ | Resultados de compilación con estadísticas de éxito/fallo |
+
+**Características:**
+- Muestra archivos compilados exitosamente y con errores
+- Estadísticas visuales con tarjetas de resumen
+- Detalles expandibles con errores de compilación
+- Tiempo de compilación por archivo
+
 ### Hub Central
 
 | Reporte | Tamaño | Propósito |
 |---------|--------|----------|
-| **dashboard.html** | 6.6K | Navegación central con breadcrumb |
+| **dashboard.html** | 6.6K | Navegación central con breadcrumb (tabs: Analyzer, Autofix, Compile) |
 
 ---
 
@@ -170,7 +190,7 @@ Genera:
 ### Autofix
 ```bash
 ./main.py --fix --json-input json/checkpatch.json
-./main.py --fix --json-input json/checkpatch.json --dry-run  # sin guardar
+./main.py --fix --json-input json/checkpatch.json --type warning  # solo warnings
 ```
 
 Genera:
@@ -178,17 +198,42 @@ Genera:
 - `json/fixed.json`
 - Actualiza archivos con correcciones
 
+### Compilación ⭐ NUEVO
+```bash
+# Compilar archivos modificados después de autofix
+./main.py --compile --json-input json/fixed.json --kernel-root /path/to/kernel/linux
+
+# Compilar y restaurar backups después
+./main.py --compile --json-input json/fixed.json --kernel-root /path/to/kernel/linux --restore-after
+
+# Compilar sin limpiar archivos .o
+./main.py --compile --json-input json/fixed.json --kernel-root /path/to/kernel/linux --no-cleanup
+```
+
+Genera:
+- `html/compile.html` - Reporte visual de compilación
+- `json/compile.json` - Resultados en formato JSON
+- Salida en consola con resumen de éxito/fallos
+
+Características:
+- Compila archivos uno por uno usando el sistema de build del kernel
+- No deja archivos .o en el kernel (limpieza automática)
+- Puede restaurar backups antes/después de compilar
+- Muestra errores de compilación detallados
+
 ### Tests
 ```bash
 # Tests de integración (requiere kernel Linux)
 ./test.py                          # Ejecuta test de integración completo
 
 # Tests unitarios (no requiere dependencias externas)
-./test_fixes.py                    # Ejecuta todos los tests unitarios (32 tests)
-./test_fixes.py -v                 # Ejecuta con salida detallada
+./test_fixes.py                    # Tests de fixes (32 tests)
+./test_compile.py                  # Tests de compilación (10 tests)
+./test_compile.py -v               # Ejecuta con salida detallada
 
 # Test específico
 python3 -m unittest test_fixes.TestFixFunctions.test_fix_indent_tabs
+python3 -m unittest test_compile.TestCompilationResult.test_compilation_result_success
 ```
 
 Los tests unitarios se ejecutan automáticamente en CI/CD con GitHub Actions en cada push.
@@ -196,7 +241,7 @@ Ver `TESTING.md` para documentación completa sobre cómo agregar tests para nue
 
 ### Script Automatizado
 ```bash
-./run  # Ejecuta: analyze → autofix → muestra resumen
+./run  # Ejecuta: analyze → autofix → compile → muestra resumen
 ```
 
 ---

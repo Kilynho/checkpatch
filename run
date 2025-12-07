@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script de prueba rápida: análisis y autofix unificado
+# Script de prueba rápida: análisis, autofix y compilación unificado
 
 # Volver al directorio del checkpatch
 cd /home/kilynho/src/checkpatch/ || exit
@@ -9,3 +9,7 @@ python3 main.py --analyze ~/src/kernel/linux --paths init
 
 # Ejecutar autofix
 python3 main.py --fix --json-input json/checkpatch.json
+
+# Ejecutar compilación de archivos modificados
+# Los archivos se restauran después de probar la compilación
+python3 main.py --compile --json-input json/fixed.json --kernel-root ~/src/kernel/linux --restore-after

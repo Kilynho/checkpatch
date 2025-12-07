@@ -947,6 +947,7 @@ def generate_dashboard_html(html_file):
       <nav>
         <button class="tab active" data-target="analyzer">Analyzer</button>
         <button class="tab" data-target="autofix">Autofix</button>
+        <button class="tab" data-target="compile">Compile</button>
       </nav>
     </div>
     <div class="breadcrumb" id="breadcrumb">Analyzer</div>
@@ -959,6 +960,7 @@ def generate_dashboard_html(html_file):
     const routes = {
       analyzer: { url: 'analyzer.html', label: 'Analyzer', breadcrumb: [{ label: 'Analyzer', target: 'analyzer' }] },
       autofix: { url: 'autofix.html', label: 'Autofix', breadcrumb: [{ label: 'Autofix', target: 'autofix' }] },
+      compile: { url: 'compile.html', label: 'Compile', breadcrumb: [{ label: 'Compile', target: 'compile' }] },
       'detail-reason': { url: 'detail-reason.html', label: 'Detalle por motivo', breadcrumb: [{ label: 'Analyzer', target: 'analyzer' }, { label: 'Detalle por motivo', target: 'detail-reason' }] },
       'detail-file': { url: 'detail-file.html', label: 'Detalle por fichero', breadcrumb: [{ label: 'Analyzer', target: 'analyzer' }, { label: 'Detalle por motivo', target: 'detail-reason' }, { label: 'Detalle por fichero', target: 'detail-file' }] },
       'autofix-detail-reason': { url: 'autofix-detail-reason.html', label: 'Detalle por tipo de fix', breadcrumb: [{ label: 'Autofix', target: 'autofix' }, { label: 'Detalle por tipo de fix', target: 'autofix-detail-reason' }] },
@@ -1009,6 +1011,8 @@ def generate_dashboard_html(html_file):
         currentContext = 'analyzer';
       } else if (targetKeyOrUrl === 'autofix' || targetKeyOrUrl === 'autofix-detail-reason' || targetKeyOrUrl === 'autofix-detail-file') {
         currentContext = 'autofix';
+      } else if (targetKeyOrUrl === 'compile') {
+        currentContext = 'compile';
       }
     }
 
@@ -1460,5 +1464,257 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
     append("</script>")
     append("</body></html>")
     
+    with open(html_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(html_out))
+
+
+def generate_compile_html(results, html_file, kernel_root=None):
+    """
+    Genera reporte HTML para resultados de compilación.
+    
+    Args:
+        results: Lista de CompilationResult
+        html_file: Ruta del archivo HTML a generar
+        kernel_root: Directorio raíz del kernel (para rutas relativas)
+    """
+    from pathlib import Path
+    
+    html_out = []
+    append = html_out.append
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
+    
+    # Calcular estadísticas
+    total = len(results)
+    successful = sum(1 for r in results if r.success)
+    failed = total - successful
+    success_rate = (successful / total * 100) if total > 0 else 0
+    total_duration = sum(r.duration for r in results)
+    avg_duration = total_duration / total if total > 0 else 0
+    
+    # Header y CSS
+    append("<!doctype html><html><head><meta charset='utf-8'>")
+    append("<title>Compilation Report</title>")
+    append("<style>")
+    append(COMMON_CSS)
+    append("""
+    .success-box { 
+        background: #e8f5e9; 
+        border-left: 4px solid #4caf50; 
+        padding: 15px; 
+        margin: 10px 0; 
+        border-radius: 4px; 
+    }
+    .failed-box { 
+        background: #ffebee; 
+        border-left: 4px solid #f44336; 
+        padding: 15px; 
+        margin: 10px 0; 
+        border-radius: 4px; 
+    }
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+    }
+    .stat-card {
+        background: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+    }
+    .stat-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 2em;
+        color: #2196F3;
+    }
+    .stat-card.success h3 { color: #4caf50; }
+    .stat-card.failed h3 { color: #f44336; }
+    .stat-card p {
+        margin: 0;
+        color: #666;
+        font-size: 0.9em;
+    }
+    .file-result {
+        margin: 10px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .file-result summary {
+        cursor: pointer;
+        padding: 12px;
+        background: #f9f9f9;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
+    }
+    .file-result summary:hover { background: #f0f0f0; }
+    .file-result.success summary { background: #e8f5e9; color: #2e7d32; }
+    .file-result.failed summary { background: #ffebee; color: #c62828; }
+    .file-result .detail-content {
+        padding: 12px;
+        background: white;
+        border-top: 1px solid #ddd;
+    }
+    .error-output {
+        background: #f5f5f5;
+        padding: 10px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85em;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        border-left: 3px solid #f44336;
+    }
+    .breadcrumb {
+        background: #f5f5f5;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+    .breadcrumb a {
+        color: #2196F3;
+        text-decoration: none;
+        margin: 0 5px;
+    }
+    .breadcrumb a:hover { text-decoration: underline; }
+    </style>")
+    append("</head><body>")
+    
+    # Breadcrumb
+    append("<div class='breadcrumb'>")
+    append("<a href='dashboard.html'>🏠 Dashboard</a> → ")
+    append("<span>📦 Compilation Report</span>")
+    append("</div>")
+    
+    # Header
+    append(f"<h1>Informe de Compilación <span style='font-weight:normal'>{timestamp}</span></h1>")
+    
+    # Executive Summary con cajas de éxito
+    append("<div class='stat-grid'>")
+    
+    append("<div class='stat-card'>")
+    append(f"<h3>{total}</h3>")
+    append("<p>Total Files</p>")
+    append("</div>")
+    
+    append("<div class='stat-card success'>")
+    append(f"<h3>{successful}</h3>")
+    append("<p>Successful</p>")
+    append("</div>")
+    
+    append("<div class='stat-card failed'>")
+    append(f"<h3>{failed}</h3>")
+    append("<p>Failed</p>")
+    append("</div>")
+    
+    append("<div class='stat-card'>")
+    append(f"<h3>{success_rate:.1f}%</h3>")
+    append("<p>Success Rate</p>")
+    append("</div>")
+    
+    append("<div class='stat-card'>")
+    append(f"<h3>{total_duration:.1f}s</h3>")
+    append("<p>Total Time</p>")
+    append("</div>")
+    
+    append("<div class='stat-card'>")
+    append(f"<h3>{avg_duration:.1f}s</h3>")
+    append("<p>Avg Time</p>")
+    append("</div>")
+    
+    append("</div>")
+    
+    # Resumen visual
+    if failed == 0:
+        append("<div class='success-box'>")
+        append("<h3>✓ All files compiled successfully!</h3>")
+        append(f"<p>All {total} files were compiled without errors.</p>")
+        append("</div>")
+    else:
+        append("<div class='failed-box'>")
+        append(f"<h3>⚠ {failed} file(s) failed to compile</h3>")
+        append(f"<p>{successful} out of {total} files compiled successfully ({success_rate:.1f}%).</p>")
+        append("</div>")
+    
+    # Resultados detallados
+    append("<h2>Compilation Results</h2>")
+    
+    # Separar resultados exitosos y fallidos
+    successful_results = [r for r in results if r.success]
+    failed_results = [r for r in results if not r.success]
+    
+    # Mostrar fallidos primero
+    if failed_results:
+        append("<h3 class='errors'>Failed Compilations</h3>")
+        for result in failed_results:
+            file_name = Path(result.file_path).name
+            rel_path = result.file_path
+            if kernel_root:
+                try:
+                    rel_path = str(Path(result.file_path).relative_to(kernel_root))
+                except ValueError:
+                    pass
+            
+            append(f"<details class='file-result failed'>")
+            append("<summary>")
+            append(f"<span>✗ {html_module.escape(file_name)}</span>")
+            append(f"<span style='font-size:0.9em;color:#666;'>{result.duration:.2f}s</span>")
+            append("</summary>")
+            append("<div class='detail-content'>")
+            append(f"<p><strong>File:</strong> {html_module.escape(rel_path)}</p>")
+            append(f"<p><strong>Duration:</strong> {result.duration:.2f}s</p>")
+            
+            if result.error_message:
+                append("<p><strong>Error:</strong></p>")
+                append(f"<div class='error-output'>{html_module.escape(result.error_message)}</div>")
+            
+            if result.stderr and result.stderr != result.error_message:
+                append("<details style='margin-top:10px;'>")
+                append("<summary style='cursor:pointer;color:#666;'>Full stderr output</summary>")
+                append(f"<pre style='margin-top:10px;'>{html_module.escape(result.stderr[:2000])}</pre>")
+                append("</details>")
+            
+            append("</div>")
+            append("</details>")
+    
+    # Mostrar exitosos
+    if successful_results:
+        append("<h3 style='color:#2e7d32;'>Successful Compilations</h3>")
+        for result in successful_results:
+            file_name = Path(result.file_path).name
+            rel_path = result.file_path
+            if kernel_root:
+                try:
+                    rel_path = str(Path(result.file_path).relative_to(kernel_root))
+                except ValueError:
+                    pass
+            
+            append(f"<details class='file-result success'>")
+            append("<summary>")
+            append(f"<span>✓ {html_module.escape(file_name)}</span>")
+            append(f"<span style='font-size:0.9em;color:#666;'>{result.duration:.2f}s</span>")
+            append("</summary>")
+            append("<div class='detail-content'>")
+            append(f"<p><strong>File:</strong> {html_module.escape(rel_path)}</p>")
+            append(f"<p><strong>Duration:</strong> {result.duration:.2f}s</p>")
+            
+            if result.stdout:
+                append("<details style='margin-top:10px;'>")
+                append("<summary style='cursor:pointer;color:#666;'>Compilation output</summary>")
+                append(f"<pre style='margin-top:10px;'>{html_module.escape(result.stdout[:1000])}</pre>")
+                append("</details>")
+            
+            append("</div>")
+            append("</details>")
+    
+    append("</body></html>")
+    
+    # Escribir archivo
+    Path(html_file).parent.mkdir(parents=True, exist_ok=True)
     with open(html_file, "w", encoding="utf-8") as f:
         f.write("\n".join(html_out))
