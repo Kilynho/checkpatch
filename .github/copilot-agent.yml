@@ -1,0 +1,16 @@
+agent:
+  name: reviewer-agent
+  description: >
+    Revisa código, sugiere cambios, escribe tests, ejecuta pruebas y reporta resultados en PRs o bajo petición manual.
+  triggers:
+    - pull_request_opened
+    - manual
+  tasks:
+    - run: python scripts/review_and_test.py
+      description: >
+        1. Revisa el código propuesto (Python, HTML, JSON).
+        2. Sugiere mejoras y corrige errores.
+        3. Escribe y ejecuta tests automáticos.
+        4. Reporta comentarios y resultados en el PR.
+      env:
+        PYTHONPATH: src/
