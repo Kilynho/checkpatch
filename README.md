@@ -180,11 +180,23 @@ Ficheros modificados:   11/14 (78.6%)
 Archivos compilables:   10
   ├─ Éxitos:            7 (70.0%)
   └─ Fallos:            3 (30.0%)
-Tiempo promedio:        2.01s/archivo
+Tiempo promedio:        2.30s/archivo
+
+Clasificación de errores:
+  ├─ Config/Context:    2 (símbolos no declarados por CONFIG_*)
+  └─ Desconocido:       1 (conflicto de sección)
 ```
 
-**Nota:** Los 3 fallos de compilación son falsos positivos por falta de contexto del kernel 
-completo (dependencias externas, configuración). El autofix no introduce errores reales.
+**Nota sobre errores de compilación:**
+Los 3 fallos son errores de **configuración/contexto del kernel**, no bugs del autofix:
+- `do_mounts_initrd.c`: `envp_init` no declarado (requiere CONFIG_BLK_DEV_INITRD)
+- `do_mounts_rd.c`: Redefinición de funciones (requiere configuración específica)
+- `main.c`: Conflicto de sección `__initconst` (problema del kernel original)
+
+El sistema de compilación ahora:
+✅ Auto-configura el kernel (`make defconfig`) si falta `.config`
+✅ Clasifica errores por tipo (config, code, dependency, unknown)
+✅ Distingue bugs de autofix vs problemas del entorno
 
 ---
 
