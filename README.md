@@ -180,9 +180,19 @@ Genera:
 
 ### Tests
 ```bash
-./test.py                          # Ejecuta todos los tests
-./test.py TestAutofix.test_indent  # Test específico
+# Tests de integración (requiere kernel Linux)
+./test.py                          # Ejecuta test de integración completo
+
+# Tests unitarios (no requiere dependencias externas)
+./test_fixes.py                    # Ejecuta todos los tests unitarios (32 tests)
+./test_fixes.py -v                 # Ejecuta con salida detallada
+
+# Test específico
+python3 -m unittest test_fixes.TestFixFunctions.test_fix_indent_tabs
 ```
+
+Los tests unitarios se ejecutan automáticamente en CI/CD con GitHub Actions en cada push.
+Ver `TESTING.md` para documentación completa sobre cómo agregar tests para nuevos fixes.
 
 ### Script Automatizado
 ```bash
@@ -228,6 +238,7 @@ Y más... ver `FIXES_STATUS.md`
 - **ARCHITECTURE.md** - Estructura de módulos y flujo general
 - **HTML_REPORTS.md** - Arquitectura de 7 reportes HTML
 - **CHANGELOG.md** - Historial de cambios y versiones
+- **TESTING.md** ⭐ - Guía completa para escribir tests y agregar nuevos fixes
 - **QUICK_REFERENCE.md** - Guía rápida URLs y contenidos
 - **FIXES_STATUS.md** - Estado de cada fix soportado
 - **FALSOS_POSITIVOS_ANALISIS.md** - Análisis de false positives
@@ -300,6 +311,27 @@ json/fixed.json (resultados)
 
 ---
 
+## 🚀 CI/CD y Testing
+
+### ✅ Tests Automáticos
+- **32 tests unitarios** para todos los fixes implementados
+- Tests se ejecutan automáticamente en **GitHub Actions** en cada push/PR
+- No requieren dependencias externas (kernel Linux)
+- Cobertura completa de todas las funciones de fix activas
+
+### 🔄 Workflow CI/CD
+```yaml
+Trigger: push, pull_request, workflow_dispatch
+  → Checkout código
+  → Setup Python 3.12
+  → Ejecutar test_fixes.py
+  → Reporte de resultados
+```
+
+Ver `.github/workflows/test.yml` y `TESTING.md` para más detalles.
+
+---
+
 ## 🚀 Próximas Mejoras
 
 - [ ] Búsqueda/filtrado en detail pages
@@ -307,7 +339,8 @@ json/fixed.json (resultados)
 - [ ] API REST
 - [ ] Comparación before/after
 - [ ] Timeline de cambios
-- [ ] Integración CI/CD
+- [x] Integración CI/CD ✅
+- [x] Tests unitarios completos ✅
 
 ---
 
