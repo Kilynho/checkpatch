@@ -32,9 +32,16 @@ from report import (
     generate_dashboard_html,
     generate_autofix_html,
     generate_autofix_detail_reason_html,
-    generate_autofix_detail_file_html
+    generate_autofix_detail_file_html,
+    generate_compile_html
 )
 from utils import find_source_files
+from compile import (
+    compile_modified_files,
+    restore_backups,
+    print_summary,
+    save_json_report
+)
 
 
 def analyze_mode(args):
@@ -252,6 +259,84 @@ def fix_mode(args):
     return 0
 
 
+def compile_mode(args):
+    """Modo compilación: compila archivos modificados y verifica que compilen."""
+    
+    json_file = Path(args.json_input)
+    if not json_file.exists():
+        print(f"[ERROR] No existe el archivo: {json_file}")
+        return 1
+    
+    # Leer archivos modificados del JSON de autofix
+    with open(json_file, "r") as f:
+        report_data = json.load(f)
+    
+    # Extraer lista de archivos que fueron modificados
+    modified_files = []
+    if isinstance(report_data, dict):
+        # JSON de autofix (formato: {file: {error: [], warning: []}})
+        for file_path, issues in report_data.items():
+            if file_path == "summary":
+                continue
+            # Verificar si hay algún fix aplicado
+            has_fixes = any(
+                i.get("fixed", False) 
+                for issue_list in [issues.get("error", []), issues.get("warning", [])]
+                for i in issue_list
+            )
+            if has_fixes:
+                modified_files.append(Path(file_path))
+    elif isinstance(report_data, list):
+        # JSON de checkpatch (formato: [{file: ..., error: [], warning: []}])
+        modified_files = [Path(entry["file"]) for entry in report_data]
+    
+    if not modified_files:
+        print("[COMPILE] No se encontraron archivos modificados para compilar")
+        return 0
+    
+    # Restaurar backups si se solicita
+    if args.restore_before:
+        print(f"[COMPILE] Restaurando {len(modified_files)} archivos desde backup...")
+        restore_backups(modified_files)
+    
+    # Compilar archivos
+    kernel_root = Path(args.kernel_root).resolve()
+    if not kernel_root.exists():
+        print(f"[ERROR] Kernel root no encontrado: {kernel_root}")
+        return 1
+    
+    print(f"[COMPILE] Kernel root: {kernel_root}")
+    results = compile_modified_files(
+        modified_files, 
+        kernel_root, 
+        cleanup=not args.no_cleanup
+    )
+    
+    # Restaurar backups después si se solicita
+    if args.restore_after:
+        print(f"\n[COMPILE] Restaurando {len(modified_files)} archivos desde backup...")
+        restore_backups(modified_files)
+    
+    # Generar reportes
+    html_path = Path(args.html)
+    html_path.parent.mkdir(parents=True, exist_ok=True)
+    generate_compile_html(results, html_path, kernel_root)
+    
+    # Generar JSON
+    json_path = Path(args.json_out)
+    save_json_report(results, json_path)
+    
+    # Resumen en consola
+    print_summary(results)
+    
+    print(f"\n[COMPILE] ✓ Informe HTML generado: {html_path}")
+    print(f"[COMPILE] ✓ JSON generado: {json_path}")
+    
+    # Retornar 0 si todos compilaron exitosamente, 1 si hubo fallos
+    failed_count = sum(1 for r in results if not r.success)
+    return 1 if failed_count > 0 else 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Checkpatch analyzer y autofix unificado",
@@ -263,6 +348,9 @@ Ejemplos:
   
   # Aplicar fixes
   %(prog)s --fix --json-input json/checkpatch.json
+  
+  # Compilar archivos modificados
+  %(prog)s --compile --json-input json/fixed.json --kernel-root /path/to/kernel/linux
         """
     )
     
@@ -271,6 +359,7 @@ Ejemplos:
     mode_group.add_argument("--analyze", metavar="KERNEL_ROOT", 
                            help="Modo análisis: ruta al root del kernel Linux")
     mode_group.add_argument("--fix", action="store_true", help="Modo autofix")
+    mode_group.add_argument("--compile", action="store_true", help="Modo compilación: prueba compilar archivos modificados")
     
     # Argumentos para análisis
     analyze_group = parser.add_argument_group("Opciones de análisis")
@@ -283,10 +372,20 @@ Ejemplos:
     
     # Argumentos para autofix
     fix_group = parser.add_argument_group("Opciones de autofix")
-    fix_group.add_argument("--json-input", help="JSON de entrada de checkpatch")
+    fix_group.add_argument("--json-input", help="JSON de entrada de checkpatch o autofix")
     fix_group.add_argument("--type", choices=["warning", "error", "all"], default="all",
                           help="Filtrar por tipo (default: all)")
     fix_group.add_argument("--file", help="Procesar solo este fichero específico")
+    
+    # Argumentos para compilación
+    compile_group = parser.add_argument_group("Opciones de compilación")
+    compile_group.add_argument("--kernel-root", help="Directorio raíz del kernel Linux")
+    compile_group.add_argument("--restore-before", action="store_true",
+                              help="Restaurar backups antes de compilar")
+    compile_group.add_argument("--restore-after", action="store_true",
+                              help="Restaurar backups después de compilar")
+    compile_group.add_argument("--no-cleanup", action="store_true",
+                              help="No limpiar archivos .o después de compilar")
     
     # Argumentos comunes
     parser.add_argument("--html", help="Archivo HTML de salida (default: html/analyzer.html o html/autofix.html)")
@@ -330,6 +429,16 @@ Ejemplos:
         args.html = args.html or "html/autofix.html"
         args.json_out = args.json_out or "json/fixed.json"
         return fix_mode(args)
+    
+    elif args.compile:
+        if not args.json_input:
+            parser.error("--compile requiere --json-input")
+        if not args.kernel_root:
+            parser.error("--compile requiere --kernel-root")
+        # Ajustar defaults para compile
+        args.html = args.html or "html/compile.html"
+        args.json_out = args.json_out or "json/compile.json"
+        return compile_mode(args)
 
 
 if __name__ == "__main__":
