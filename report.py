@@ -170,19 +170,29 @@ def _generate_table_row_with_bars(label, files_count, files_total, occ_count, oc
     row_style = f" style='{bg_style}'" if bg_style else ""
     
     label_class = f" class='{css_class}'" if css_class else ""
-    label_style = f" style='{bold_style}'" if bold_style and not css_class else f" style='{css_class}; {bold_style}'" if css_class and bold_style else ""
+    # Build label_style considering both bold and css_class (improved readability)
+    if bold_style and css_class:
+        label_style = f" style='{css_class}; {bold_style}'"
+    elif bold_style:
+        label_style = f" style='{bold_style}'"
+    else:
+        label_style = ""
     
     num_style = f" style='{bold_style}'" if bold_style else ""
+    
+    # Build span style for percentage cells (improved readability)
+    span_style_base = "flex:none"
+    span_style_full = f"{span_style_base}; {bold_style}" if bold_style else span_style_base
     
     return (f"<tr{row_style}>"
             f"<td{label_class}{label_style}>{label}</td>"
             f"<td class='num'{num_style}>{files_count}</td>"
             f"<td class='num' style='width:{cell_width}px; display:flex; align-items:center; gap:6px;'>"
-            f"<span style='flex:none{'; ' + bold_style if bold_style else ''}'>{f_pct}</span>"
+            f"<span style='{span_style_full}'>{f_pct}</span>"
             f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{css_class}' style='width:{f_bar}px'></div></div></td>"
             f"<td class='num'{num_style}>{occ_count}</td>"
             f"<td class='num' style='width:{cell_width}px; display:flex; align-items:center; gap:6px;'>"
-            f"<span style='flex:none{'; ' + bold_style if bold_style else ''}'>{o_pct}</span>"
+            f"<span style='{span_style_full}'>{o_pct}</span>"
             f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{css_class}' style='width:{o_bar}px'></div></div></td></tr>")
 
 def _generate_reason_table_section(reason_files_dict, issue_type, cell_width=220):
@@ -1498,8 +1508,10 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
         if os.path.exists(bak_path):
             diff_text = _get_diff(bak_path, filepath)
             if diff_text:
-                total_added = len([l for l in diff_text.split('\n') if l.startswith('+') and not l.startswith('+++')])
-                total_removed = len([l for l in diff_text.split('\n') if l.startswith('-') and not l.startswith('---')])
+                # Split once and reuse (avoid duplicate processing)
+                diff_lines = diff_text.split('\n')
+                total_added = len([l for l in diff_lines if l.startswith('+') and not l.startswith('+++')])
+                total_removed = len([l for l in diff_lines if l.startswith('-') and not l.startswith('---')])
         
         append(f"<details class='file-detail' id='FILE:{file_id}'>")
         append(f"<summary>")
