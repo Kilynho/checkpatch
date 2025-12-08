@@ -185,6 +185,61 @@ def _generate_table_row_with_bars(label, files_count, files_total, occ_count, oc
             f"<span style='flex:none{'; ' + bold_style if bold_style else ''}'>{o_pct}</span>"
             f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{css_class}' style='width:{o_bar}px'></div></div></td></tr>")
 
+def _generate_reason_table_section(reason_files_dict, issue_type, cell_width=220):
+    """
+    Genera una sección de tabla HTML con motivos agrupados por tipo de issue.
+    
+    Args:
+        reason_files_dict: Dict {reason: [files]} con motivos y ficheros afectados
+        issue_type: Tipo de issue ('error' o 'warning')
+        cell_width: Ancho de las celdas de porcentaje en pixels
+        
+    Returns:
+        Lista de strings HTML para agregar al output
+    """
+    if not reason_files_dict:
+        return []
+    
+    lines = []
+    cls = "errors" if issue_type == "error" else "warnings"
+    section_title = "Errores" if issue_type == "error" else "Warnings"
+    
+    # Total de casos y ficheros únicos
+    total_cases = sum(len(files) for files in reason_files_dict.values())
+    total_files = len(set(f for files in reason_files_dict.values() for f in files))
+    
+    lines.append(f"<h3 class='{cls}'>{section_title}</h3>")
+    lines.append(f"<table><tr><th>Motivo</th><th>Ficheros</th><th>% Ficheros</th><th>Casos</th><th>% de {issue_type}s</th></tr>")
+    
+    for reason, files_list in sorted(reason_files_dict.items(), key=lambda x: -len(x[1])):
+        count_cases = len(files_list)
+        count_files = len(set(files_list))
+        pct_files = percentage(count_files, total_files)
+        pct_cases = percentage(count_cases, total_cases)
+        bar_files_len = bar_width(count_files, total_files, max_width=cell_width - 50)
+        bar_cases_len = bar_width(count_cases, total_cases, max_width=cell_width - 50)
+        
+        # Limpiar texto del motivo
+        reason_text = reason
+        if reason_text.startswith(f"{issue_type.upper()}: "):
+            reason_text = reason_text[len(f"{issue_type.upper()}: "):]
+        
+        # ID para anchor link
+        fid = reason.replace("/", "_").replace(" ", "_")
+        
+        lines.append(f"<tr><td>{_escape_html(f'{issue_type.upper()}: {reason_text}')}</td>"
+                    f"<td class='num'>{count_files}</td>"
+                    f"<td class='num' style='width:{cell_width}px; display:flex; align-items:center; gap:6px;'>"
+                    f"<span style='flex:none'>{pct_files}</span>"
+                    f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{cls}' style='width:{bar_files_len}px'></div></div></td>"
+                    f"<td class='num'><a href='#{fid}'>{count_cases}</a></td>"
+                    f"<td class='num' style='width:{cell_width}px; display:flex; align-items:center; gap:6px;'>"
+                    f"<span style='flex:none'>{pct_cases}</span>"
+                    f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{cls}' style='width:{bar_cases_len}px'></div></div></td></tr>")
+    
+    lines.append("</table>")
+    return lines
+
 # --- Función para mostrar rutas relativas ---
 def display_fp(fp):
     try:
@@ -408,42 +463,9 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
             if w.get("fixed"):
                 warning_reason_files[w.get("message", "UNKNOWN")].append(f)
 
-    # --- Función para escribir tabla de motivos ---
-    def write_reason_table(reason_files_dict, typ):
-        cls = "errors" if typ=="error" else "warnings"
-        section_title = "Errores" if typ=="error" else "Warnings"
-        # total de casos
-        total_cases = sum(len(files) for files in reason_files_dict.values())
-        # total de ficheros únicos que contienen al menos un motivo
-        total_files = len(set(f for files in reason_files_dict.values() for f in files))
-
-        append(f"<h3 class='{cls}'>{section_title}</h3>")
-        append(f"<table><tr><th>Motivo</th><th>Ficheros</th><th>% Ficheros</th><th>Casos</th><th>% de {typ}s</th></tr>")
-
-        for reason, files_list in sorted(reason_files_dict.items(), key=lambda x: -len(x[1])):
-            count_cases = len(files_list)
-            count_files = len(set(files_list))
-            pct_files = percentage(count_files, total_files)
-            pct_cases = percentage(count_cases, total_cases)
-            bar_files_len = bar_width(count_files, total_files, max_width=PCT_CELL_WIDTH-50)
-            bar_cases_len = bar_width(count_cases, total_cases, max_width=PCT_CELL_WIDTH-50)
-            reason_text = reason
-            if reason_text.startswith(f"{typ.upper()}: "):
-                reason_text = reason_text[len(f"{typ.upper()}: "):]
-            fid = reason.replace("/", "_").replace(" ", "_")
-            append(f"<tr><td>{html_module.escape(f'{typ.upper()}: {reason_text}')}</td>"
-                   f"<td class='num'>{count_files}</td>"
-                   f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
-                   f"<span style='flex:none'>{pct_files}</span>"
-                   f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{cls}' style='width:{bar_files_len}px'></div></div></td>"
-                   f"<td class='num'><a href='#{fid}'>{count_cases}</a></td>"
-                   f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
-                   f"<span style='flex:none'>{pct_cases}</span>"
-                   f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{cls}' style='width:{bar_cases_len}px'></div></div></td></tr>")
-        append("</table>")
-
-    write_reason_table(error_reason_files, "error")
-    write_reason_table(warning_reason_files, "warning")
+    # --- Generar tablas de motivos usando helper común ---
+    html_out.extend(_generate_reason_table_section(error_reason_files, "error", PCT_CELL_WIDTH))
+    html_out.extend(_generate_reason_table_section(warning_reason_files, "warning", PCT_CELL_WIDTH))
 
     # --- Detalle por motivo ---
     append("<h2>Detalle por motivo</h2>")
