@@ -13,3 +13,6 @@ python3 main.py --fix --json-input json/checkpatch.json
 # Ejecutar compilación de archivos modificados
 # Los archivos se restauran después de probar la compilación
 python3 main.py --compile --json-input json/fixed.json --kernel-root ~/src/kernel/linux --restore-after
+
+# Siempre retornar éxito (los errores de compilación son parte del análisis)
+exit 0
