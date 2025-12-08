@@ -17,6 +17,7 @@ from typing import List, Dict, Tuple, Optional
 import json
 import time
 import logger
+from locale import get_text as _
 
 
 class CompilationResult:
@@ -62,7 +63,7 @@ def ensure_kernel_configured(kernel_root: Path) -> bool:
     if config_file.exists():
         return True
     
-    logger.info("[COMPILE] Kernel not configured. Running 'make defconfig'...")
+    logger.info(f"[COMPILE] {_('compile.kernel_not_configured')}")
     try:
         result = subprocess.run(
             ['make', 'defconfig'],
@@ -73,14 +74,14 @@ def ensure_kernel_configured(kernel_root: Path) -> bool:
         )
         
         if result.returncode == 0 and config_file.exists():
-            logger.info("[COMPILE] ✓ Kernel configured successfully")
+            logger.info(f"[COMPILE] {_('compile.kernel_configured')}")
             return True
         else:
-            logger.error(f"[COMPILE] ✗ Failed to configure kernel: {result.stderr[:200]}")
+            logger.error(f"[COMPILE] {_('compile.kernel_config_failed', error=result.stderr[:200])}")
             return False
             
     except Exception as e:
-        logger.error(f"[COMPILE] ✗ Exception while configuring kernel: {e}")
+        logger.error(f"[COMPILE] {_('compile.kernel_config_exception', error=e)}")
         return False
 
 

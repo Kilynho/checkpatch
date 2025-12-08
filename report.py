@@ -10,6 +10,7 @@ import datetime
 import subprocess
 import hashlib
 from utils import COMMON_CSS, percentage, bar_width, percentage_value
+from locale import get_text as _
 
 # ============================
 # HELPER FUNCTIONS - COMMON
@@ -312,7 +313,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = percentage(o_count, o_count_errors_total)
     f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
-    append(f"<tr><td class='errors'>ERRORES CORREGIDOS</td>"
+    append(f"<tr><td class='errors'>{_('html.errors_fixed')}</td>"
            f"<td class='num'>{f_count}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none'>{f_pct}</span>"
