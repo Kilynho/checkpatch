@@ -53,7 +53,7 @@
     "global_summary": "Resumen global",
     "detail_by_reason": "Detalle por motivo",
     "detail_by_file": "Detalle por fichero",
-    "compilation_results": "Compilation Results",
+    "compilation_results": "Resultados de Compilación",
     "status": "Estado",
     "files": "Ficheros",
     "files_percent": "% Ficheros",
@@ -87,8 +87,8 @@
     "view_details": "Ver detalles",
     "expand_all": "Expandir todo",
     "collapse_all": "Colapsar todo",
-    "no_changes": "No changes",
-    "diff": "Diff"
+    "no_changes": "Sin cambios",
+    "diff": "Diferencias"
   },
   "cli": {
     "mode_group": "Modos de operación",

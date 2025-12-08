@@ -7,6 +7,7 @@ Proporciona soporte multiidioma mediante archivos JSON de localización.
 
 import json
 import os
+import sys
 from pathlib import Path
 
 
@@ -44,7 +45,8 @@ class LocaleManager:
         
         if not lang_file.exists():
             # Fallback a español si el idioma no existe
-            print(f"[WARNING] Language file not found: {lang_file}")
+            # Use stderr to avoid circular import with logger
+            sys.stderr.write(f"[i18n WARNING] Language file not found: {lang_file}\n")
             if self.current_language != "es":
                 self.current_language = "es"
                 lang_file = self.i18n_dir / "es.json"
@@ -53,7 +55,8 @@ class LocaleManager:
             with open(lang_file, 'r', encoding='utf-8') as f:
                 self.strings = json.load(f)
         except Exception as e:
-            print(f"[ERROR] Failed to load language file {lang_file}: {e}")
+            # Use stderr to avoid circular import with logger
+            sys.stderr.write(f"[i18n ERROR] Failed to load language file {lang_file}: {e}\n")
             self.strings = {}
     
     def get(self, key, **kwargs):

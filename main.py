@@ -87,7 +87,10 @@ def analyze_mode(args):
         return f"[{bar}] {percent:.1f}% ({current}/{total})"
     
     logger.info(f"[ANALYZER] {_('analyzer.analyzing', total=total, workers=args.workers)}")
-    logger.debug(f"[ANALYZER] {_('analyzer.files_to_analyze', files=[str(f) for f in all_files[:5]])}" + "{'...' if len(all_files) > 5 else ''}")
+    files_preview = [str(f) for f in all_files[:5]]
+    if len(all_files) > 5:
+        files_preview.append('...')
+    logger.debug(f"[ANALYZER] {_('analyzer.files_to_analyze', files=files_preview)}")
     
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = {executor.submit(analyze_file, f, checkpatch_script, kernel_root): f for f in all_files}
