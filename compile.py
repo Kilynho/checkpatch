@@ -58,13 +58,15 @@ def ensure_kernel_configured(kernel_root: Path) -> bool:
         True si el kernel está configurado correctamente
     """
     config_file = kernel_root / ".config"
-    
+    logger.debug(f"[ensure_kernel_configured] kernel_root={kernel_root}")
     # Si ya existe .config, asumir que está configurado
     if config_file.exists():
+        logger.debug("[ensure_kernel_configured] .config exists, kernel is configured.")
         return True
     
     logger.info(f"[COMPILE] {_('compile.kernel_not_configured')}")
     try:
+        logger.debug("[ensure_kernel_configured] Running 'make defconfig'")
         result = subprocess.run(
             ['make', 'defconfig'],
             cwd=str(kernel_root),
@@ -72,7 +74,7 @@ def ensure_kernel_configured(kernel_root: Path) -> bool:
             text=True,
             timeout=60
         )
-        
+        logger.debug(f"[ensure_kernel_configured] make defconfig returncode={result.returncode}")
         if result.returncode == 0 and config_file.exists():
             logger.info(f"[COMPILE] {_('compile.kernel_configured')}")
             return True
@@ -147,14 +149,13 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
         CompilationResult con el resultado de la compilación
     """
     try:
+        logger.debug(f"[compile_single_file] file_path={file_path}, kernel_root={kernel_root}")
         # Convertir la ruta del archivo .c a la ruta del .o correspondiente
         rel_path = file_path.relative_to(kernel_root)
         obj_path = rel_path.with_suffix('.o')
-        
         start_time = time.time()
-        
+        logger.debug(f"[compile_single_file] Compiling {obj_path}")
         # Usar make con el target específico del archivo .o
-        # Esto compila solo ese archivo sin compilar todo el kernel
         result = subprocess.run(
             ['make', str(obj_path)],
             cwd=str(kernel_root),
@@ -162,26 +163,20 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
             text=True,
             timeout=300  # 5 minutos timeout
         )
-        
         duration = time.time() - start_time
-        
+        logger.debug(f"[compile_single_file] Finished in {duration:.2f}s, returncode={result.returncode}")
         success = result.returncode == 0
         error_msg = ""
         error_type = ""
-        
         if not success:
-            # Extraer mensaje de error más relevante
             error_lines = result.stderr.split('\n')
-            # Buscar líneas con "error:" 
             error_msgs = [line for line in error_lines if 'error:' in line.lower()]
             if error_msgs:
-                error_msg = '\n'.join(error_msgs[:5])  # Primeros 5 errores
+                error_msg = '\n'.join(error_msgs[:5])
             else:
-                error_msg = result.stderr[:500]  # Primeros 500 chars si no hay errores explícitos
-            
-            # Clasificar el tipo de error
+                error_msg = result.stderr[:500]
             error_type = classify_compilation_error(error_msg, result.stderr)
-        
+            logger.debug(f"[compile_single_file] Compilation failed: error_type={error_type}, error_msg={error_msg.splitlines()[0] if error_msg else ''}")
         return CompilationResult(
             file_path=str(file_path),
             success=success,
@@ -191,8 +186,8 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
             error_message=error_msg,
             error_type=error_type
         )
-        
     except subprocess.TimeoutExpired:
+        logger.debug(f"[compile_single_file] TimeoutExpired for {file_path}")
         return CompilationResult(
             file_path=str(file_path),
             success=False,
@@ -200,6 +195,7 @@ def compile_single_file(file_path: Path, kernel_root: Path) -> CompilationResult
             error_message="Timeout: Compilation took more than 5 minutes"
         )
     except Exception as e:
+        logger.error(f"[compile_single_file] Exception: {str(e)}")
         return CompilationResult(
             file_path=str(file_path),
             success=False,
@@ -216,25 +212,20 @@ def cleanup_compiled_files(kernel_root: Path, compiled_files: List[Path]):
         kernel_root: Directorio raíz del kernel
         compiled_files: Lista de archivos .c que fueron compilados
     """
+    logger.debug(f"[cleanup_compiled_files] kernel_root={kernel_root}, compiled_files={compiled_files}")
     for c_file in compiled_files:
         try:
-            # Encontrar el archivo .o correspondiente
             rel_path = c_file.relative_to(kernel_root)
             obj_path = kernel_root / rel_path.with_suffix('.o')
-            
             if obj_path.exists():
                 obj_path.unlink()
                 logger.debug(f"[CLEANUP] Removed: {obj_path.relative_to(kernel_root)}")
-            
-            # También limpiar posibles archivos auxiliares (.cmd, .d, etc.)
             cmd_file = obj_path.parent / f".{obj_path.name}.cmd"
             if cmd_file.exists():
                 cmd_file.unlink()
-            
             d_file = obj_path.with_suffix('.o.d')
             if d_file.exists():
                 d_file.unlink()
-                
         except Exception as e:
             logger.warning(f"[CLEANUP WARNING] Could not clean {c_file}: {e}")
 
@@ -252,41 +243,32 @@ def compile_modified_files(files: List[Path], kernel_root: Path,
     Returns:
         Lista de CompilationResult con los resultados
     """
+    logger.debug(f"[compile_modified_files] files={files}, kernel_root={kernel_root}, cleanup={cleanup}")
     results = []
-    
     # Verificar/configurar el kernel antes de compilar
     if not ensure_kernel_configured(kernel_root):
-        print("[COMPILE] ✗ Cannot compile without kernel configuration")
+        logger.error("[COMPILE] ✗ Cannot compile without kernel configuration")
         return results
-    
-    print(f"[COMPILE] Compilando {len(files)} archivos...")
-    
+    logger.debug(f"[compile_modified_files] Compilando {len(files)} archivos...")
     for i, file_path in enumerate(files, 1):
-        # Solo compilar archivos .c
         if file_path.suffix != '.c':
-            print(f"[COMPILE] [{i}/{len(files)}] Skipped (not .c): {file_path.name}")
+            logger.debug(f"[compile_modified_files] Skipped (not .c): {file_path.name}")
             continue
-        
-        print(f"[COMPILE] [{i}/{len(files)}] Compiling: {file_path.relative_to(kernel_root)}")
-        
+        logger.debug(f"[compile_modified_files] Compiling: {file_path.relative_to(kernel_root)} [{i}/{len(files)}]")
         result = compile_single_file(file_path, kernel_root)
         results.append(result)
-        
         if result.success:
-            print(f"[COMPILE]   ✓ Success ({result.duration:.2f}s)")
+            logger.debug(f"[compile_modified_files] Success: {file_path} ({result.duration:.2f}s)")
         else:
-            print(f"[COMPILE]   ✗ Failed ({result.duration:.2f}s)")
+            logger.debug(f"[compile_modified_files] Failed: {file_path} ({result.duration:.2f}s)")
             if result.error_message:
-                # Mostrar solo primera línea del error
                 first_error = result.error_message.split('\n')[0]
-                print(f"[COMPILE]     Error: {first_error}")
-    
+                logger.debug(f"[compile_modified_files] Error: {first_error}")
     if cleanup:
         compiled_c_files = [Path(r.file_path) for r in results if r.success]
         if compiled_c_files:
-            print(f"\n[CLEANUP] Limpiando {len(compiled_c_files)} archivos compilados...")
+            logger.debug(f"[compile_modified_files] Limpiando {len(compiled_c_files)} archivos compilados...")
             cleanup_compiled_files(kernel_root, compiled_c_files)
-    
     return results
 
 
