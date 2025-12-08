@@ -8,138 +8,7 @@ import html as html_module
 from collections import defaultdict
 import datetime
 import subprocess
-import hashlib
 from utils import COMMON_CSS, percentage, bar_width, percentage_value
-
-# ============================
-# HELPER FUNCTIONS - COMMON
-# ============================
-
-def _format_timestamp():
-    """Genera timestamp formateado para reportes HTML."""
-    return datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
-
-def _escape_html(text):
-    """Escapa texto HTML para prevenir inyección."""
-    return html_module.escape(text)
-
-def _safe_id(text):
-    """Genera un ID único y seguro para HTML basado en texto."""
-    h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
-    return f"id_{h}"
-
-def _generate_html_header(title, timestamp):
-    """
-    Genera el header HTML común con CSS.
-    
-    Args:
-        title: Título del reporte
-        timestamp: Timestamp formateado
-        
-    Returns:
-        Lista de strings HTML
-    """
-    lines = [
-        "<!doctype html><html><head><meta charset='utf-8'>",
-        "<style>",
-        COMMON_CSS,
-        "</style></head><body>",
-        f"<h1>{title} <span style='font-weight:normal'>{timestamp}</span></h1>"
-    ]
-    return lines
-
-def _generate_percentage_bar(count, total, max_width=170, css_class=""):
-    """
-    Genera HTML para una barra de progreso con porcentaje.
-    
-    Args:
-        count: Valor actual
-        total: Valor total
-        max_width: Ancho máximo de la barra en pixels
-        css_class: Clase CSS para colorear la barra (bar-errors, bar-warnings, etc.)
-        
-    Returns:
-        Tupla (pct_text, bar_width_px, pct_value) donde:
-        - pct_text: String del porcentaje formateado (ej: "85.5%")
-        - bar_width_px: Ancho de la barra en pixels
-        - pct_value: Valor numérico del porcentaje (0-100)
-    """
-    pct_text = percentage(count, total)
-    pct_value = percentage_value(count, total)
-    bar_width_px = bar_width(count, total, max_width=max_width)
-    return pct_text, bar_width_px, pct_value
-
-def _format_diff_html(diff_text):
-    """
-    Formatea un diff unificado con colores HTML.
-    
-    Args:
-        diff_text: Texto del diff en formato unificado
-        
-    Returns:
-        String HTML con el diff coloreado
-    """
-    if not diff_text or not diff_text.strip():
-        return '<pre class="diff-pre" style="color:#999;">No changes</pre>'
-    
-    out = ['<pre class="diff-pre">']
-    for line in diff_text.split('\n'):
-        if line.startswith('+++') or line.startswith('---'):
-            out.append(f'<span style="color:#999; font-weight:bold;">{_escape_html(line)}</span>')
-        elif line.startswith('@@'):
-            out.append(f'<span style="color:#2196F3; font-weight:bold;">{_escape_html(line)}</span>')
-        elif line.startswith('+') and not line.startswith('+++'):
-            out.append(f'<span style="color:#4CAF50; background:#f1f8f4;">{_escape_html(line)}</span>')
-        elif line.startswith('-') and not line.startswith('---'):
-            out.append(f'<span style="color:#f44336; background:#ffe6e6;">{_escape_html(line)}</span>')
-        else:
-            out.append(_escape_html(line))
-    out.append('</pre>')
-    return '\n'.join(out)
-
-def _get_diff(bak_path, current_path):
-    """
-    Obtiene el diff entre dos archivos usando el comando diff.
-    
-    Args:
-        bak_path: Ruta del archivo backup
-        current_path: Ruta del archivo actual
-        
-    Returns:
-        String con el diff o string vacío en caso de error
-    """
-    try:
-        res = subprocess.run(['diff', '-u', bak_path, current_path], 
-                           capture_output=True, text=True)
-        return res.stdout
-    except Exception:
-        return ''
-
-def _colorize_checkpatch_output(text):
-    """
-    Coloriza el output del checkpatch: ERROR en rojo, WARNING en naranja, + en verde, # en gris.
-    
-    Args:
-        text: Salida de checkpatch
-        
-    Returns:
-        String HTML con colores aplicados
-    """
-    lines = text.split('\n')
-    colored_lines = []
-    for line in lines:
-        escaped_line = _escape_html(line)
-        if line.startswith('ERROR:'):
-            colored_lines.append(f"<span style='color: #d32f2f; font-weight: bold;'>{escaped_line}</span>")
-        elif line.startswith('WARNING:'):
-            colored_lines.append(f"<span style='color: #f57c00; font-weight: bold;'>{escaped_line}</span>")
-        elif line.startswith('+'):
-            colored_lines.append(f"<span style='color: #2e7d32;'>{escaped_line}</span>")
-        elif line.startswith('#'):
-            colored_lines.append(f"<span style='color: #757575;'>{escaped_line}</span>")
-        else:
-            colored_lines.append(escaped_line)
-    return '\n'.join(colored_lines)
 
 # --- Función para mostrar rutas relativas ---
 def display_fp(fp):
@@ -150,14 +19,9 @@ def display_fp(fp):
         return fp
 
 def generate_html_report(report_data, html_file, kernel_dir="."):
-    """
-    Genera reporte HTML de autofix con resumen global y detalle por motivo/fichero.
-    
-    Args:
-        report_data: Dict con datos de fixes aplicados {filepath: {error: [...], warning: [...]}}
-        html_file: Ruta del archivo HTML de salida
-        kernel_dir: Directorio raíz del kernel (para rutas relativas)
-    """
+
+    # ...existing code...
+
     # --- Contadores globales sobre incidencias fijadas y saltadas ---
     files_with_errors = {f for f, issues in report_data.items() if any(i.get("fixed") for i in issues.get("error", []))}
     files_with_warnings = {f for f, issues in report_data.items() if any(i.get("fixed") for i in issues.get("warning", []))}
@@ -175,10 +39,14 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
 
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
 
     # --- Header y CSS ---
-    html_out.extend(_generate_html_header("Informe Checkpatch Autofix", timestamp))
+    append("<!doctype html><html><head><meta charset='utf-8'>")
+    append("<style>")
+    append(COMMON_CSS)
+    append("</style></head><body>")
+    append(f"<h1>Informe Checkpatch Autofix <span style='font-weight:normal'>{timestamp}</span></h1>")
 
     # --- Tabla resumen global ---
     append("<h2>Resumen global</h2>")
@@ -412,6 +280,35 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
         for fp, cnt in file_counts.items():
             append(f"<li><a href='#{fp.replace('/', '_')}'>{display_fp(fp)} ({cnt})</a></li>")
         append("</ul>")
+        # --- Detalle por fichero separado (mejorado: genera diffs desde backups .bak) ---
+        # helper: escape and format diffs with coloring
+        def _escape_html(s):
+            return html_module.escape(s)
+
+        def _format_diff_html(diff_text):
+            if not diff_text or not diff_text.strip():
+                return '<pre class="diff-pre" style="color:#999;">No changes</pre>'
+            out = ['<pre class="diff-pre">']
+            for line in diff_text.split('\n'):
+                if line.startswith('+++') or line.startswith('---'):
+                    out.append(f'<span style="color:#999; font-weight:bold;">{_escape_html(line)}</span>')
+                elif line.startswith('@@'):
+                    out.append(f'<span style="color:#2196F3; font-weight:bold;">{_escape_html(line)}</span>')
+                elif line.startswith('+') and not line.startswith('+++'):
+                    out.append(f'<span style="color:#4CAF50; background:#f1f8f4;">{_escape_html(line)}</span>')
+                elif line.startswith('-') and not line.startswith('---'):
+                    out.append(f'<span style="color:#f44336; background:#ffe6e6;">{_escape_html(line)}</span>')
+                else:
+                    out.append(_escape_html(line))
+            out.append('</pre>')
+            return '\n'.join(out)
+
+        def _get_diff(bak_path, current_path):
+            try:
+                res = subprocess.run(['diff', '-u', bak_path, current_path], capture_output=True, text=True)
+                return res.stdout
+            except Exception:
+                return ''
 
         # Aggregate fix stats (for 'Arreglos por Tipo' or summaries)
         fix_stats = defaultdict(int)
@@ -549,7 +446,7 @@ def generate_analyzer_html(analysis_data, html_file):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
     
     # Helper para rutas relativas
     def get_relative_path(fp):
@@ -561,7 +458,11 @@ def generate_analyzer_html(analysis_data, html_file):
         return fp
     
     # Header y CSS
-    html_out.extend(_generate_html_header("Informe Checkpatch Analyzer", timestamp))
+    append("<!doctype html><html><head><meta charset='utf-8'>")
+    append("<style>")
+    append(COMMON_CSS)
+    append("</style></head><body>")
+    append(f"<h1>Informe Checkpatch Analyzer <span style='font-weight:normal'>{timestamp}</span></h1>")
     
     # ============================
     # RESUMEN GLOBAL
@@ -654,7 +555,13 @@ def generate_analyzer_html(analysis_data, html_file):
             pct_files_val = percentage_value(num_files, total_error_files)
             pct_cases_val = percentage_value(count, total_error_cases)
             
-            reason_id = _safe_id("ERROR:" + reason)
+            # Helper para generar ID único
+            import hashlib
+            def safe_id(text):
+                h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+                return f"id_{h}"
+            
+            reason_id = safe_id("ERROR:" + reason)
             
             append(f"<tr><td>ERROR: {html_module.escape(reason)}</td>"
                    f"<td class='num'>{num_files}</td>"
@@ -696,7 +603,13 @@ def generate_analyzer_html(analysis_data, html_file):
             pct_files_val = percentage_value(num_files, total_warning_files)
             pct_cases_val = percentage_value(count, total_warning_cases)
             
-            reason_id = _safe_id("WARNING:" + reason)
+            # Helper para generar ID único
+            import hashlib
+            def safe_id(text):
+                h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+                return f"id_{h}"
+            
+            reason_id = safe_id("WARNING:" + reason)
             
             append(f"<tr><td>WARNING: {html_module.escape(reason)}</td>"
                    f"<td class='num'>{num_files}</td>"
@@ -720,6 +633,12 @@ def generate_analyzer_html(analysis_data, html_file):
 
 def generate_detail_reason_html(analysis_data, html_file):
     """Genera detail-reason.html con el análisis detallado por motivo."""
+    import hashlib
+    
+    def safe_id(text):
+        h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+        return f"id_{h}"
+    
     error_reasons = analysis_data["error_reasons"]
     warning_reasons = analysis_data["warning_reasons"]
     error_reason_files = analysis_data["error_reason_files"]
@@ -736,17 +655,21 @@ def generate_detail_reason_html(analysis_data, html_file):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
     
     # Header minimalista
-    html_out.extend(_generate_html_header("Informe Checkpatch - Detalle por motivo", timestamp))
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
+    append("<!doctype html><html><head><meta charset='utf-8'>")
+    append("<style>")
+    append(COMMON_CSS)
+    append("</style></head><body>")
+    append(f"<h1>Informe Checkpatch - Detalle por motivo <span style='font-weight:normal'>{timestamp}</span></h1>")
     
     # ERRORES - Detallado
     if error_reasons:
         append("<h2 class='errors'>Detalle por motivo - Errores</h2>")
         for reason in sorted(error_reasons.keys()):
             count = error_reasons[reason]
-            reason_id = _safe_id("ERROR:" + reason)
+            reason_id = safe_id("ERROR:" + reason)
             files_for_reason = sorted(set(fp for fp, _ in error_reason_files.get(reason, [])))
             
             append(f"<h4 id='{reason_id}' class='errors'>ERROR: {html_module.escape(reason)}</h4>")
@@ -755,7 +678,7 @@ def generate_detail_reason_html(analysis_data, html_file):
             for fp in files_for_reason:
                 lines = sorted(set(line for f, line in error_reason_files.get(reason, []) if f == fp))
                 rel_path = get_relative_path(fp)
-                file_id = _safe_id("FILE:" + fp)
+                file_id = safe_id("FILE:" + fp)
                 append(f"<li><a href='detail-file.html#{file_id}'>{rel_path}</a> - líneas {', '.join(map(str, lines))}</li>")
             append("</ul>")
     
@@ -764,7 +687,7 @@ def generate_detail_reason_html(analysis_data, html_file):
         append("<h2 class='warnings'>Detalle por motivo - Warnings</h2>")
         for reason in sorted(warning_reasons.keys()):
             count = warning_reasons[reason]
-            reason_id = _safe_id("WARNING:" + reason)
+            reason_id = safe_id("WARNING:" + reason)
             files_for_reason = sorted(set(fp for fp, _ in warning_reason_files.get(reason, [])))
             
             append(f"<h4 id='{reason_id}' class='warnings'>WARNING: {html_module.escape(reason)}</h4>")
@@ -773,7 +696,7 @@ def generate_detail_reason_html(analysis_data, html_file):
             for fp in files_for_reason:
                 lines = sorted(set(line for f, line in warning_reason_files.get(reason, []) if f == fp))
                 rel_path = get_relative_path(fp)
-                file_id = _safe_id("FILE:" + fp)
+                file_id = safe_id("FILE:" + fp)
                 append(f"<li><a href='detail-file.html#{file_id}'>{rel_path}</a> - líneas {', '.join(map(str, lines))}</li>")
             append("</ul>")
     
@@ -785,6 +708,30 @@ def generate_detail_reason_html(analysis_data, html_file):
 
 def generate_detail_file_html(analysis_data, html_file):
     """Genera detail-file.html con el análisis detallado por fichero."""
+    import hashlib
+    
+    def safe_id(text):
+        h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+        return f"id_{h}"
+    
+    def colorize_output(text):
+        """Coloriza el output del checkpatch: ERROR en rojo, WARNING en naranja, + en verde, # en gris."""
+        lines = text.split('\n')
+        colored_lines = []
+        for line in lines:
+            escaped_line = html_module.escape(line)
+            if line.startswith('ERROR:'):
+                colored_lines.append(f"<span style='color: #d32f2f; font-weight: bold;'>{escaped_line}</span>")
+            elif line.startswith('WARNING:'):
+                colored_lines.append(f"<span style='color: #f57c00; font-weight: bold;'>{escaped_line}</span>")
+            elif line.startswith('+'):
+                colored_lines.append(f"<span style='color: #2e7d32;'>{escaped_line}</span>")
+            elif line.startswith('#'):
+                colored_lines.append(f"<span style='color: #757575;'>{escaped_line}</span>")
+            else:
+                colored_lines.append(escaped_line)
+        return '\n'.join(colored_lines)
+    
     file_outputs = analysis_data.get("file_outputs", {})
     kernel_dir = analysis_data.get("kernel_dir", "")
     error_reason_files = analysis_data["error_reason_files"]
@@ -800,7 +747,7 @@ def generate_detail_file_html(analysis_data, html_file):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
     
     # Helper para rutas relativas
     def get_relative_path_helper(fp):
@@ -812,7 +759,11 @@ def generate_detail_file_html(analysis_data, html_file):
         return fp
     
     # Header y CSS
-    html_out.extend(_generate_html_header("Informe Checkpatch - Detalle por fichero", timestamp))
+    append("<!doctype html><html><head><meta charset='utf-8'>")
+    append("<style>")
+    append(COMMON_CSS)
+    append("</style></head><body>")
+    append(f"<h1>Informe Checkpatch - Detalle por fichero <span style='font-weight:normal'>{timestamp}</span></h1>")
     
     # JavaScript para abrir el desplegable al llegar por ancla
     append("<script>")
@@ -848,7 +799,7 @@ def generate_detail_file_html(analysis_data, html_file):
     append("<h2>Detalle por fichero</h2>")
     
     for fp in sorted(file_issues.keys()):
-        file_id = _safe_id("FILE:" + fp)
+        file_id = safe_id("FILE:" + fp)
         rel_path = get_relative_path_helper(fp)
         
         issues = file_issues[fp]
@@ -871,7 +822,7 @@ def generate_detail_file_html(analysis_data, html_file):
         # Output del checkpatch con colores
         if fp in file_outputs:
             output = file_outputs[fp]
-            colored_output = _colorize_checkpatch_output(output)
+            colored_output = colorize_output(output)
             append(f"<pre class='diff-pre'>{colored_output}</pre>")
         else:
             append(f"<p><em>Sin salida disponible</em></p>")
@@ -1156,7 +1107,7 @@ def generate_autofix_html(fixed_data, html_file):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
     
     files_errors_fixed = len({f for f, issues in fixed_data.items() if any(i.get("fixed") for i in issues.get("error", []))})
     files_errors_total = len({f for f, issues in fixed_data.items() if issues.get("error")})
@@ -1173,10 +1124,9 @@ def generate_autofix_html(fixed_data, html_file):
     pct_total_files = (100.0 * total_files_fixed) / max(1, total_files)
     pct_total_occ = (100.0 * total_occ_fixed) / max(1, total_occ)
     
-    html_out.extend(_generate_html_header("Informe Checkpatch Autofix", timestamp))
-    
-    # CSS adicional específico para autofix
+    append("<!doctype html><html><head><meta charset='utf-8'>")
     append("<style>")
+    append(COMMON_CSS)
     append(".exec-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }")
     append(".exec-box { padding: 15px; border-radius: 6px; border-left: 4px solid; }")
     append(".exec-box.success { background: #c8e6c9; border-color: #2e7d32; }")
@@ -1184,7 +1134,8 @@ def generate_autofix_html(fixed_data, html_file):
     append(".exec-box h3 { margin: 0 0 10px 0; font-size: 14px; }")
     append(".exec-box .value { font-size: 24px; font-weight: bold; margin-bottom: 5px; }")
     append(".exec-box .percent { font-size: 12px; color: #555; }")
-    append("</style>")
+    append("</style></head><body>")
+    append(f"<h1>Informe Checkpatch Autofix <span style='font-weight:normal'>{timestamp}</span></h1>")
     append("<div class='exec-summary'>")
     append(f"<div class='exec-box success'><h3>🎯 Tasa de Éxito</h3><div class='value'>{pct_total_occ:.1f}%</div><div class='percent'>{total_occ_fixed}/{total_occ} issues</div></div>")
     append(f"<div class='exec-box partial'><h3>📁 Ficheros Procesados</h3><div class='value'>{total_files_fixed}/{total_files}</div><div class='percent'>Con al menos 1 fix</div></div>")
@@ -1254,6 +1205,7 @@ def generate_autofix_html(fixed_data, html_file):
         total_error_files = len(set(f for d in error_fixes_by_reason.values() for f in d['files']))
         total_error_cases = sum(len(d['lines']) for d in error_fixes_by_reason.values())
         
+        import hashlib
         # Ordenar por número de casos descendente
         for reason in sorted(error_fixes_by_reason.keys(), key=lambda r: len(error_fixes_by_reason[r]['lines']), reverse=True):
             files_count = len(error_fixes_by_reason[reason]['files'])
@@ -1286,6 +1238,7 @@ def generate_autofix_html(fixed_data, html_file):
         total_warning_files = len(set(f for d in warning_fixes_by_reason.values() for f in d['files']))
         total_warning_cases = sum(len(d['lines']) for d in warning_fixes_by_reason.values())
         
+        import hashlib
         # Ordenar por número de casos descendente
         for reason in sorted(warning_fixes_by_reason.keys(), key=lambda r: len(warning_fixes_by_reason[r]['lines']), reverse=True):
             files_count = len(warning_fixes_by_reason[reason]['files'])
@@ -1327,19 +1280,19 @@ def generate_autofix_detail_reason_html(fixed_data, html_file):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
     
-    html_out.extend(_generate_html_header("Autofix - Detalle por motivo", timestamp))
-    
-    # CSS adicional específico
+    append("<!doctype html><html><head><meta charset='utf-8'>")
     append("<style>")
+    append(COMMON_CSS)
     append(".fix-type-count { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }")
     append(".fix-type-card { padding: 12px; border-radius: 6px; border-left: 4px solid; text-align: center; }")
     append(".fix-type-card.error { background: #ffebee; border-color: #d32f2f; }")
     append(".fix-type-card.warning { background: #fff3e0; border-color: #f57c00; }")
     append(".fix-type-card .type-name { font-size: 11px; color: #555; text-transform: uppercase; margin-bottom: 5px; }")
     append(".fix-type-card .count { font-size: 20px; font-weight: bold; }")
-    append("</style>")
+    append("</style></head><body>")
+    append(f"<h1>Autofix - Detalle por motivo <span style='font-weight:normal'>{timestamp}</span></h1>")
     
     error_count = sum(len(fixed_by_reason[r]['error']) for r in fixed_by_reason)
     warning_count = sum(len(fixed_by_reason[r]['warning']) for r in fixed_by_reason)
@@ -1350,6 +1303,7 @@ def generate_autofix_detail_reason_html(fixed_data, html_file):
     append(f"<div class='fix-type-card warning'><div class='type-name'>Total de Motivos Diferentes</div><div class='count'>{len(fixed_by_reason)}</div></div>")
     append("</div>")
     
+    import hashlib
     for reason in sorted(fixed_by_reason.keys()):
         # Usar mismo sistema que analyzer: id_HASH
         is_error = bool(fixed_by_reason[reason]['error'])
@@ -1379,12 +1333,40 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
     
-    html_out.extend(_generate_html_header("Autofix - Detalle por fichero", timestamp))
+    # Helper para colorizar diffs
+    def _escape_html(s):
+        return html_module.escape(s)
     
-    # CSS adicional específico
+    def _format_diff_html(diff_text):
+        if not diff_text or not diff_text.strip():
+            return '<pre class="diff-pre" style="color:#999;">No changes</pre>'
+        out = ['<pre class="diff-pre">']
+        for line in diff_text.split('\n'):
+            if line.startswith('+++') or line.startswith('---'):
+                out.append(f'<span style="color:#999; font-weight:bold;">{_escape_html(line)}</span>')
+            elif line.startswith('@@'):
+                out.append(f'<span style="color:#2196F3; font-weight:bold;">{_escape_html(line)}</span>')
+            elif line.startswith('+') and not line.startswith('+++'):
+                out.append(f'<span style="color:#4CAF50; background:#f1f8f4;">{_escape_html(line)}</span>')
+            elif line.startswith('-') and not line.startswith('---'):
+                out.append(f'<span style="color:#f44336; background:#ffe6e6;">{_escape_html(line)}</span>')
+            else:
+                out.append(_escape_html(line))
+        out.append('</pre>')
+        return '\n'.join(out)
+    
+    def _get_diff(bak_path, current_path):
+        try:
+            res = subprocess.run(['diff', '-u', bak_path, current_path], capture_output=True, text=True)
+            return res.stdout
+        except Exception:
+            return ''
+    
+    append("<!doctype html><html><head><meta charset='utf-8'>")
     append("<style>")
+    append(COMMON_CSS)
     append(".file-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 20px 0; max-width: 100%; }")
     append(".file-summary-card { padding: 10px; border-radius: 4px; background: #f5f5f5; border: 1px solid #ddd; font-size: 12px; }")
     append(".file-summary-card .fname { font-weight: bold; color: #2196F3; margin-bottom: 5px; word-break: break-word; }")
@@ -1392,7 +1374,8 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
     append(".file-summary-card .stat { display: flex; align-items: center; gap: 4px; }")
     append(".file-summary-card .fixed-s { color: #2e7d32; }")
     append(".file-summary-card .skipped-s { color: #757575; }")
-    append("</style>")
+    append("</style></head><body>")
+    append(f"<h1>Autofix - Detalle por fichero <span style='font-weight:normal'>{timestamp}</span></h1>")
     
     # Calcular summary para ficheros con fixes
     file_summaries = []
@@ -1407,6 +1390,7 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
         append("<div class='file-summary'>")
         for filepath, fixed_count, skipped_count in file_summaries:
             display_path = display_fp(filepath)
+            import hashlib
             file_id = hashlib.sha1(filepath.encode()).hexdigest()[:8]
             append(f"<div class='file-summary-card'><div class='fname'><a href='#FILE:{file_id}' style='color:#2196F3;'>{display_path}</a></div>")
             append(f"<div class='stats'><span class='stat fixed-s'>✓ {fixed_count}</span><span class='stat skipped-s'>✗ {skipped_count}</span></div></div>")
@@ -1422,6 +1406,7 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
         if fixed_count == 0:
             continue
         
+        import hashlib
         file_id = hashlib.sha1(filepath.encode()).hexdigest()[:8]
         
         # Calcular stats del diff
@@ -1431,9 +1416,8 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
         diff_text = None
         if os.path.exists(bak_path):
             diff_text = _get_diff(bak_path, filepath)
-            if diff_text:
-                total_added = len([l for l in diff_text.split('\n') if l.startswith('+') and not l.startswith('+++')])
-                total_removed = len([l for l in diff_text.split('\n') if l.startswith('-') and not l.startswith('---')])
+            total_added = len([l for l in diff_text.split('\n') if l.startswith('+') and not l.startswith('+++')])
+            total_removed = len([l for l in diff_text.split('\n') if l.startswith('-') and not l.startswith('---')])
         
         append(f"<details class='file-detail' id='FILE:{file_id}'>")
         append(f"<summary>")
@@ -1497,7 +1481,7 @@ def generate_compile_html(results, html_file, kernel_root=None):
     
     html_out = []
     append = html_out.append
-    timestamp = _format_timestamp()
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S %d/%m/%Y")
     
     # Calcular estadísticas
     total = len(results)
@@ -1512,8 +1496,6 @@ def generate_compile_html(results, html_file, kernel_root=None):
     append("<title>Compilation Report</title>")
     append("<style>")
     append(COMMON_CSS)
-    
-    # CSS adicional específico para compilación
     append("""
     .success-box { 
         background: #e8f5e9; 
