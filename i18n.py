@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-locale.py - Sistema de internacionalización (i18n) para checkpatch
+i18n.py - Sistema de internacionalización (i18n) para checkpatch
 
 Proporciona soporte multiidioma mediante archivos JSON de localización.
 """

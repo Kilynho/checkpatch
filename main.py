@@ -21,8 +21,8 @@ import threading
 import logger
 
 # Sistema de internacionalización
-import locale as i18n_module
-from locale import get_text as _
+import i18n
+from i18n import get_text as _
 
 # Módulos unificados
 from engine import (
@@ -421,7 +421,7 @@ Ejemplos:
     args = parser.parse_args()
     
     # Configurar idioma
-    i18n_module.set_language(args.language)
+    i18n.set_language(args.language)
     
     # Configurar logging
     log_level = logger.get_level_from_string(args.log_level)

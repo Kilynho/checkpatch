@@ -17,7 +17,7 @@ from typing import List, Dict, Tuple, Optional
 import json
 import time
 import logger
-from locale import get_text as _
+from i18n import get_text as _
 
 
 class CompilationResult:
