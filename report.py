@@ -141,6 +141,50 @@ def _colorize_checkpatch_output(text):
             colored_lines.append(escaped_line)
     return '\n'.join(colored_lines)
 
+def _generate_table_row_with_bars(label, files_count, files_total, occ_count, occ_total, 
+                                   css_class="", cell_width=220, bold=False, background=""):
+    """
+    Genera una fila de tabla HTML con barras de progreso para ficheros y casos.
+    
+    Args:
+        label: Etiqueta de la fila
+        files_count: Número de ficheros para esta categoría
+        files_total: Total de ficheros para calcular porcentaje
+        occ_count: Número de casos para esta categoría
+        occ_total: Total de casos para calcular porcentaje
+        css_class: Clase CSS para el label (errors, warnings, total, etc.)
+        cell_width: Ancho de las celdas de porcentaje en pixels
+        bold: Si True, hace el texto en negrita
+        background: Color de fondo para la fila (ej: '#e3f2fd')
+        
+    Returns:
+        String HTML con la fila completa
+    """
+    f_pct = percentage(files_count, files_total)
+    o_pct = percentage(occ_count, occ_total)
+    f_bar = bar_width(files_count, files_total, max_width=cell_width - 50)
+    o_bar = bar_width(occ_count, occ_total, max_width=cell_width - 50)
+    
+    bold_style = "font-weight:bold" if bold else ""
+    bg_style = f"background:{background}" if background else ""
+    row_style = f" style='{bg_style}'" if bg_style else ""
+    
+    label_class = f" class='{css_class}'" if css_class else ""
+    label_style = f" style='{bold_style}'" if bold_style and not css_class else f" style='{css_class}; {bold_style}'" if css_class and bold_style else ""
+    
+    num_style = f" style='{bold_style}'" if bold_style else ""
+    
+    return (f"<tr{row_style}>"
+            f"<td{label_class}{label_style}>{label}</td>"
+            f"<td class='num'{num_style}>{files_count}</td>"
+            f"<td class='num' style='width:{cell_width}px; display:flex; align-items:center; gap:6px;'>"
+            f"<span style='flex:none{'; ' + bold_style if bold_style else ''}'>{f_pct}</span>"
+            f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{css_class}' style='width:{f_bar}px'></div></div></td>"
+            f"<td class='num'{num_style}>{occ_count}</td>"
+            f"<td class='num' style='width:{cell_width}px; display:flex; align-items:center; gap:6px;'>"
+            f"<span style='flex:none{'; ' + bold_style if bold_style else ''}'>{o_pct}</span>"
+            f"<div class='bar' style='flex:1;'><div class='bar-inner bar-{css_class}' style='width:{o_bar}px'></div></div></td></tr>")
+
 # --- Función para mostrar rutas relativas ---
 def display_fp(fp):
     try:
