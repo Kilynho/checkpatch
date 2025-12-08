@@ -28,6 +28,8 @@ class LocaleManager:
             self.strings = {}
             self.i18n_dir = Path(__file__).parent / "i18n"
             self._initialized = True
+            # Load default language strings on initialization
+            self._load_strings()
     
     def set_language(self, language_code):
         """

@@ -20,6 +20,16 @@ class TestI18n(unittest.TestCase):
         """Reset language to Spanish before each test."""
         i18n.set_language('es')
     
+    def test_default_language_loaded_on_init(self):
+        """Verify default language strings are loaded on initialization."""
+        # Create a new LocaleManager instance to test initialization
+        import importlib
+        importlib.reload(i18n)
+        # After reload, strings should be loaded
+        text = i18n.get_text('html.dashboard_title')
+        self.assertNotEqual(text, '[MISSING: html.dashboard_title]')
+        self.assertEqual(text, 'Checkpatch Dashboard')
+    
     def test_set_language_spanish(self):
         """Verify Spanish language can be set."""
         i18n.set_language('es')
