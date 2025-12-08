@@ -52,64 +52,54 @@ def analyze_mode(args):
     """Modo análisis: analiza archivos y genera reporte HTML."""
     
     # Buscar archivos en todos los directorios especificados
+    logger.debug(f"[ANALYZER] args.source_dirs={args.source_dirs}, args.extensions={args.extensions}")
     all_files = []
     for source_dir in args.source_dirs:
+        logger.debug(f"[ANALYZER] Buscando archivos en: {source_dir}")
         files = find_source_files(source_dir, extensions=args.extensions)
+        logger.debug(f"[ANALYZER] Encontrados {len(files)} archivos en {source_dir}")
         all_files.extend(files)
-    
     if not all_files:
         logger.error(f"[ERROR] No se encontraron archivos con extensiones {args.extensions}")
         return 1
-    
     checkpatch_script = args.checkpatch
     kernel_root = args.kernel_root
-    
-    # Resetear estructuras globales
     reset_analysis()
-    
-    # Estructura para JSON compatible con autofix
     json_data = []
-    
-    # Barra de progreso
     total = len(all_files)
     completed = 0
     lock = threading.Lock()
-    
     def progress_bar(current, total):
         percent = current / total * 100
         bar_len = 40
         filled = int(bar_len * current / total)
         bar = '#' * filled + ' ' * (bar_len - filled)
         return f"[{bar}] {percent:.1f}% ({current}/{total})"
-    
     logger.info(f"[ANALYZER] Analizando {total} archivos con {args.workers} workers...")
     logger.debug(f"[ANALYZER] Archivos a analizar: {[str(f) for f in all_files[:5]]}{'...' if len(all_files) > 5 else ''}")
     
+    logger.debug(f"[ANALYZER] Lanzando ThreadPoolExecutor con {args.workers} workers")
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = {executor.submit(analyze_file, f, checkpatch_script, kernel_root): f for f in all_files}
-        
         for future in as_completed(futures):
             file_path = futures[future]
+            logger.debug(f"[ANALYZER] Iniciando análisis de: {file_path}")
             try:
                 errors, warnings, is_correct = future.result()
-                
-                # Agregar a JSON si tiene issues
+                logger.debug(f"[ANALYZER] Finalizado análisis de: {file_path} - {len(errors)} errores, {len(warnings)} warnings")
                 if errors or warnings:
                     json_data.append({
                         "file": str(file_path),
                         "error": errors,
                         "warning": warnings
                     })
-                
-                # Progreso
                 with lock:
                     completed += 1
                     if completed % 10 == 0 or completed == total:
                         print(f"\r[ANALYZER] Progreso: {progress_bar(completed, total)}", end="")
-                    logger.debug(f"[ANALYZER] Analizado {file_path}: {len(errors)} errores, {len(warnings)} warnings")
-                
             except Exception as e:
                 logger.error(f"\n[ERROR] {file_path}: {e}")
+                logger.debug(f"[ANALYZER] Error al analizar {file_path}: {e}")
     
     print()  # Nueva línea después de la barra
     
@@ -175,10 +165,10 @@ def fix_mode(args):
     
     for entry in files_data:
         file_path = Path(entry["file"]).resolve()
-        
+        logger.debug(f"[AUTOFIX] Procesando archivo: {file_path}")
         if file_filter and file_filter != file_path:
+            logger.debug(f"[AUTOFIX] Archivo filtrado: {file_path} (filtro: {file_filter})")
             continue
-        
         # Reunir issues según tipo
         issues_to_fix = []
         if args.type in ("warning", "all"):
@@ -187,31 +177,29 @@ def fix_mode(args):
         if args.type in ("error", "all"):
             for e in entry.get("error", []):
                 issues_to_fix.append({"type": "error", **e})
-        
+        logger.debug(f"[AUTOFIX] Issues a corregir: {len(issues_to_fix)}")
         if not issues_to_fix:
+            logger.debug(f"[AUTOFIX] Ningún issue para corregir en: {file_path}")
             continue
-        
         issues_to_fix.sort(key=lambda x: -x["line"])  # de abajo hacia arriba
-        
+        logger.debug(f"[AUTOFIX] Issues ordenados para aplicar fixes")
         # Aplicar fixes
+        logger.debug(f"[AUTOFIX] Llamando a apply_fixes para {file_path}")
         fix_results = apply_fixes(file_path, issues_to_fix)
-        
+        logger.debug(f"[AUTOFIX] apply_fixes completado para {file_path}")
         file_modified = False
         for orig_issue, res in zip(issues_to_fix, fix_results):
             typ = orig_issue["type"]
             line = orig_issue["line"]
             message = orig_issue["message"]
             fixed = res.get("fixed", False)
-            
             report_data[str(file_path)][typ].append({
                 "line": line,
                 "message": message,
                 "fixed": fixed
             })
-            
             if fixed:
                 file_modified = True
-        
         if file_modified:
             modified_files.add(str(file_path))
             logger.info(f"[AUTOFIX]  - {file_path.relative_to(file_path.parent.parent.parent)}")
@@ -244,19 +232,20 @@ def fix_mode(args):
     # Generar HTML
     html_path = Path(args.html)
     html_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Generar 3 archivos de autofix
+    logger.debug(f"[AUTOFIX] Generando HTML principal: {html_path}")
     generate_autofix_html(report_data, html_path)
+    logger.debug(f"[AUTOFIX] Generando HTML detalle motivo: {html_path.parent / 'autofix-detail-reason.html'}")
     generate_autofix_detail_reason_html(report_data, html_path.parent / "autofix-detail-reason.html")
+    logger.debug(f"[AUTOFIX] Generando HTML detalle archivo: {html_path.parent / 'autofix-detail-file.html'}")
     generate_autofix_detail_file_html(report_data, html_path.parent / "autofix-detail-file.html")
-    
     # Generar dashboard
     dashboard_path = html_path.parent / "dashboard.html"
+    logger.debug(f"[AUTOFIX] Generando dashboard: {dashboard_path}")
     generate_dashboard_html(dashboard_path)
-    
     # Guardar JSON de resultados
     json_out_path = Path(args.json_out)
     json_out_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"[AUTOFIX] Guardando JSON de resultados: {json_out_path}")
     with open(json_out_path, "w", encoding="utf-8") as f:
         json.dump(report_data, f, indent=2, default=str)
     
@@ -455,19 +444,16 @@ Ejemplos:
         return analyze_mode(args)
     
     elif args.fix:
-        if not args.json_input:
-            parser.error("--fix requiere --json-input")
         # Ajustar defaults para fix
+        args.json_input = args.json_input or "json/checkpatch.json"
         args.html = args.html or "html/autofix.html"
         args.json_out = args.json_out or "json/fixed.json"
         return fix_mode(args)
     
     elif args.compile:
-        if not args.json_input:
-            parser.error("--compile requiere --json-input")
-        if not args.kernel_root:
-            parser.error("--compile requiere --kernel-root")
         # Ajustar defaults para compile
+        args.json_input = args.json_input or "json/fixed.json"
+        args.kernel_root = kernel_root
         args.html = args.html or "html/compile.html"
         args.json_out = args.json_out or "json/compile.json"
         return compile_mode(args)
