@@ -20,6 +20,10 @@ import threading
 # Sistema de logging
 import logger
 
+# Sistema de internacionalización
+import i18n
+from i18n import get_text as _
+
 # Módulos unificados
 from engine import (
     apply_fixes,
@@ -60,7 +64,7 @@ def analyze_mode(args):
         logger.debug(f"[ANALYZER] Encontrados {len(files)} archivos en {source_dir}")
         all_files.extend(files)
     if not all_files:
-        logger.error(f"[ERROR] No se encontraron archivos con extensiones {args.extensions}")
+        logger.error(f"[ERROR] {_('errors.files_not_found', extensions=args.extensions)}")
         return 1
     checkpatch_script = args.checkpatch
     kernel_root = args.kernel_root
@@ -75,8 +79,12 @@ def analyze_mode(args):
         filled = int(bar_len * current / total)
         bar = '#' * filled + ' ' * (bar_len - filled)
         return f"[{bar}] {percent:.1f}% ({current}/{total})"
-    logger.info(f"[ANALYZER] Analizando {total} archivos con {args.workers} workers...")
-    logger.debug(f"[ANALYZER] Archivos a analizar: {[str(f) for f in all_files[:5]]}{'...' if len(all_files) > 5 else ''}")
+    
+    logger.info(f"[ANALYZER] {_('analyzer.analyzing', total=total, workers=args.workers)}")
+    files_preview = [str(f) for f in all_files[:5]]
+    if len(all_files) > 5:
+        files_preview.append('...')
+    logger.debug(f"[ANALYZER] {_('analyzer.files_to_analyze', files=files_preview)}")
     
     logger.debug(f"[ANALYZER] Lanzando ThreadPoolExecutor con {args.workers} workers")
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
@@ -97,9 +105,10 @@ def analyze_mode(args):
                     completed += 1
                     if completed % 10 == 0 or completed == total:
                         print(f"\r[ANALYZER] Progreso: {progress_bar(completed, total)}", end="")
+                    logger.debug(f"[ANALYZER] {_('analyzer.analyzed_file', file=file_path, errors=len(errors), warnings=len(warnings))}")
+                
             except Exception as e:
-                logger.error(f"\n[ERROR] {file_path}: {e}")
-                logger.debug(f"[ANALYZER] Error al analizar {file_path}: {e}")
+                logger.error(f"\n[ERROR] {_('errors.file_error', file=file_path, error=e)}")
     
     print()  # Nueva línea después de la barra
     
@@ -132,12 +141,12 @@ def analyze_mode(args):
     error_count = sum(analysis_data["error_reasons"].values())
     warning_count = sum(analysis_data["warning_reasons"].values())
     
-    logger.info(f"[ANALYZER] Errores encontrados: {error_count}")
-    logger.info(f"[ANALYZER] Warnings encontrados: {warning_count}")
-    logger.info(f"[ANALYZER] Total encontrados: {error_count + warning_count}")
-    logger.info(f"[ANALYZER] ✔ Análisis terminado.")
-    logger.info(f"[ANALYZER] ✔ Informe HTML generado: {html_path}")
-    logger.info(f"[ANALYZER] ✔ JSON generado: {json_path}")
+    logger.info(f"[ANALYZER] {_('analyzer.errors_found', count=error_count)}")
+    logger.info(f"[ANALYZER] {_('analyzer.warnings_found', count=warning_count)}")
+    logger.info(f"[ANALYZER] {_('analyzer.total_found', count=error_count + warning_count)}")
+    logger.info(f"[ANALYZER] {_('analyzer.analysis_complete')}")
+    logger.info(f"[ANALYZER] {_('analyzer.html_generated', path=html_path)}")
+    logger.info(f"[ANALYZER] {_('analyzer.json_generated', path=json_path)}")
     
     return 0
 
@@ -147,7 +156,7 @@ def fix_mode(args):
     
     json_file = Path(args.json_input)
     if not json_file.exists():
-        logger.error(f"[ERROR] No existe el archivo: {json_file}")
+        logger.error(f"[ERROR] {_('errors.file_not_exist', file=json_file)}")
         return 1
     
     with open(json_file, "r") as f:
@@ -160,8 +169,8 @@ def fix_mode(args):
     
     file_filter = Path(args.file).resolve() if args.file else None
     
-    logger.info("[AUTOFIX] Procesando archivos...")
-    logger.debug(f"[AUTOFIX] JSON de entrada: {json_file}, filtro de archivo: {file_filter}")
+    logger.info(f"[AUTOFIX] {_('autofix.processing')}")
+    logger.debug(f"[AUTOFIX] {_('autofix.json_input', json_file=json_file, filter=file_filter)}")
     
     for entry in files_data:
         file_path = Path(entry["file"]).resolve()
@@ -203,7 +212,7 @@ def fix_mode(args):
         if file_modified:
             modified_files.add(str(file_path))
             logger.info(f"[AUTOFIX]  - {file_path.relative_to(file_path.parent.parent.parent)}")
-            logger.debug(f"[AUTOFIX] Modificado archivo: {file_path}")
+            logger.debug(f"[AUTOFIX] {_('autofix.modified_file', file=file_path)}")
     
     # Calcular estadísticas para resumen
     errors_fixed = sum(1 for issues in report_data.values() for i in issues.get("error", []) if i.get("fixed"))
@@ -213,21 +222,21 @@ def fix_mode(args):
     
     # Resumen en consola
     if errors_fixed + errors_skipped > 0:
-        logger.info(f"[AUTOFIX] Errores procesados: {errors_fixed + errors_skipped}")
-        logger.info(f"[AUTOFIX]  - Corregidos: {errors_fixed} ({100*errors_fixed/(errors_fixed+errors_skipped):.1f}%)")
-        logger.info(f"[AUTOFIX]  - Saltados : {errors_skipped} ({100*errors_skipped/(errors_fixed+errors_skipped):.1f}%)")
+        logger.info(f"[AUTOFIX] {_('autofix.errors_processed', total=errors_fixed + errors_skipped)}")
+        logger.info(f"[AUTOFIX]  - {_('autofix.fixed', count=errors_fixed, percent=100*errors_fixed/(errors_fixed+errors_skipped))}")
+        logger.info(f"[AUTOFIX]  - {_('autofix.skipped', count=errors_skipped, percent=100*errors_skipped/(errors_fixed+errors_skipped))}")
     
     if warnings_fixed + warnings_skipped > 0:
-        logger.info(f"[AUTOFIX] Warnings procesados: {warnings_fixed + warnings_skipped}")
-        logger.info(f"[AUTOFIX]  - Corregidos: {warnings_fixed} ({100*warnings_fixed/(warnings_fixed+warnings_skipped):.1f}%)")
-        logger.info(f"[AUTOFIX]  - Saltados : {warnings_skipped} ({100*warnings_skipped/(warnings_fixed+warnings_skipped):.1f}%)")
+        logger.info(f"[AUTOFIX] {_('autofix.warnings_processed', total=warnings_fixed + warnings_skipped)}")
+        logger.info(f"[AUTOFIX]  - {_('autofix.fixed', count=warnings_fixed, percent=100*warnings_fixed/(warnings_fixed+warnings_skipped))}")
+        logger.info(f"[AUTOFIX]  - {_('autofix.skipped', count=warnings_skipped, percent=100*warnings_skipped/(warnings_fixed+warnings_skipped))}")
     
     total = errors_fixed + warnings_fixed + errors_skipped + warnings_skipped
     total_fixed = errors_fixed + warnings_fixed
     if total > 0:
-        logger.info(f"[AUTOFIX] Total procesados: {total}")
-        logger.info(f"[AUTOFIX]  - Corregidos: {total_fixed} ({100*total_fixed/total:.1f}%)")
-        logger.info(f"[AUTOFIX]  - Saltados : {total - total_fixed} ({100*(total-total_fixed)/total:.1f}%)")
+        logger.info(f"[AUTOFIX] {_('autofix.total_processed', total=total)}")
+        logger.info(f"[AUTOFIX]  - {_('autofix.fixed', count=total_fixed, percent=100*total_fixed/total)}")
+        logger.info(f"[AUTOFIX]  - {_('autofix.skipped', count=total - total_fixed, percent=100*(total-total_fixed)/total)}")
     
     # Generar HTML
     html_path = Path(args.html)
@@ -249,9 +258,9 @@ def fix_mode(args):
     with open(json_out_path, "w", encoding="utf-8") as f:
         json.dump(report_data, f, indent=2, default=str)
     
-    logger.info(f"[AUTOFIX] ✔ Análisis terminado {json_out_path}")
-    logger.info(f"[AUTOFIX] ✔ Informe HTML generado : {html_path}")
-    logger.info(f"[AUTOFIX] ✔ JSON generado: {json_out_path}")
+    logger.info(f"[AUTOFIX] {_('autofix.complete', path=json_out_path)}")
+    logger.info(f"[AUTOFIX] {_('autofix.html_generated', path=html_path)}")
+    logger.info(f"[AUTOFIX] {_('autofix.json_generated', path=json_out_path)}")
     
     return 0
 
@@ -261,7 +270,7 @@ def compile_mode(args):
     
     json_file = Path(args.json_input)
     if not json_file.exists():
-        logger.error(f"[ERROR] No existe el archivo: {json_file}")
+        logger.error(f"[ERROR] {_('errors.file_not_exist', file=json_file)}")
         return 1
     
     # Leer archivos modificados del JSON de autofix
@@ -288,23 +297,23 @@ def compile_mode(args):
         modified_files = [Path(entry["file"]) for entry in report_data]
     
     if not modified_files:
-        logger.info("[COMPILE] No se encontraron archivos modificados para compilar")
+        logger.info(f"[COMPILE] {_('compile.no_modified_files')}")
         return 0
     
-    logger.debug(f"[COMPILE] Archivos a compilar: {[str(f) for f in modified_files]}")
+    logger.debug(f"[COMPILE] {_('compile.files_to_compile', files=[str(f) for f in modified_files])}")
     
     # Restaurar backups si se solicita
     if args.restore_before:
-        logger.info(f"[COMPILE] Restaurando {len(modified_files)} archivos desde backup...")
+        logger.info(f"[COMPILE] {_('compile.restoring', count=len(modified_files))}")
         restore_backups(modified_files)
     
     # Compilar archivos
     kernel_root = Path(args.kernel_root).resolve()
     if not kernel_root.exists():
-        logger.error(f"[ERROR] Kernel root no encontrado: {kernel_root}")
+        logger.error(f"[ERROR] {_('errors.kernel_not_found', path=kernel_root)}")
         return 1
     
-    logger.info(f"[COMPILE] Kernel root: {kernel_root}")
+    logger.info(f"[COMPILE] {_('compile.kernel_root', path=kernel_root)}")
     results = compile_modified_files(
         modified_files, 
         kernel_root, 
@@ -313,7 +322,7 @@ def compile_mode(args):
     
     # Restaurar backups después si se solicita
     if args.restore_after:
-        logger.info(f"\n[COMPILE] Restaurando {len(modified_files)} archivos desde backup...")
+        logger.info(f"\n[COMPILE] {_('compile.restoring', count=len(modified_files))}")
         restore_backups(modified_files)
     
     # Generar reportes
@@ -328,8 +337,8 @@ def compile_mode(args):
     # Resumen en consola
     print_summary(results)
     
-    logger.info(f"\n[COMPILE] ✓ Informe HTML generado: {html_path}")
-    logger.info(f"[COMPILE] ✓ JSON generado: {json_path}")
+    logger.info(f"\n[COMPILE] {_('compile.html_generated', path=html_path)}")
+    logger.info(f"[COMPILE] {_('compile.json_generated', path=json_path)}")
     
     # Retornar 0 si todos compilaron exitosamente, 1 si hubo fallos
     failed_count = sum(1 for r in results if not r.success)
@@ -400,8 +409,13 @@ Ejemplos:
                               help="Archivo de log opcional (ej: logs/checkpatch.log)")
     logging_group.add_argument("--no-color", action="store_true",
                               help="Desactivar colores en la salida de consola")
+    logging_group.add_argument("--language", choices=["es", "en"], default="es",
+                              help="Idioma de la interfaz (default: es)")
     
     args = parser.parse_args()
+    
+    # Configurar idioma
+    i18n.set_language(args.language)
     
     # Configurar logging
     log_level = logger.get_level_from_string(args.log_level)
@@ -411,8 +425,8 @@ Ejemplos:
         use_colors=not args.no_color
     )
     
-    logger.debug(f"[MAIN] Argumentos: {vars(args)}")
-    logger.debug(f"[MAIN] Nivel de logging: {args.log_level}")
+    logger.debug(f"[MAIN] {_('main.arguments', args=vars(args))}")
+    logger.debug(f"[MAIN] {_('main.log_level', level=args.log_level)}")
     
     # Validar argumentos según modo
     if args.analyze:

@@ -10,6 +10,7 @@ import datetime
 import subprocess
 import hashlib
 from utils import COMMON_CSS, percentage, bar_width, percentage_value
+from i18n import get_text as _
 
 # ============================
 # HELPER FUNCTIONS - COMMON
@@ -312,7 +313,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = percentage(o_count, o_count_errors_total)
     f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
-    append(f"<tr><td class='errors'>ERRORES CORREGIDOS</td>"
+    append(f"<tr><td class='errors'>{_('html.errors_fixed')}</td>"
            f"<td class='num'>{f_count}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none'>{f_pct}</span>"
@@ -329,7 +330,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = percentage(o_count, o_count_errors_total)
     f_bar = bar_width(f_count, f_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_errors_total, max_width=PCT_CELL_WIDTH - 50)
-    append(f"<tr><td class='errors'>ERRORES SALTADOS</td>"
+    append(f"<tr><td class='errors'>{_('html.errors_skipped')}</td>"
            f"<td class='num'>{f_count}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none'>{f_pct}</span>"
@@ -344,7 +345,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = "100.0%"
     f_bar = PCT_CELL_WIDTH - 50
     o_bar = PCT_CELL_WIDTH - 50
-    append(f"<tr><td class='errors' style='font-weight:bold'>ERRORES PROCESADOS</td>"
+    append(f"<tr><td class='errors' style='font-weight:bold'>{_('html.errors').upper()}</td>"
            f"<td class='num' style='font-weight:bold'>{f_count_errors_total}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none; font-weight:bold'>{f_pct}</span>"
@@ -361,7 +362,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = percentage(o_count, o_count_warnings_total)
     f_bar = bar_width(f_count, f_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
-    append(f"<tr><td class='warnings'>WARNINGS CORREGIDOS</td>"
+    append(f"<tr><td class='warnings'>{_('html.warnings_fixed')}</td>"
            f"<td class='num'>{f_count}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none'>{f_pct}</span>"
@@ -378,7 +379,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = percentage(o_count, o_count_warnings_total)
     f_bar = bar_width(f_count, f_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
     o_bar = bar_width(o_count, o_count_warnings_total, max_width=PCT_CELL_WIDTH - 50)
-    append(f"<tr><td class='warnings'>WARNINGS SALTADOS</td>"
+    append(f"<tr><td class='warnings'>{_('html.warnings_skipped')}</td>"
            f"<td class='num'>{f_count}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none'>{f_pct}</span>"
@@ -393,7 +394,7 @@ def generate_html_report(report_data, html_file, kernel_dir="."):
     o_pct = "100.0%"
     f_bar = PCT_CELL_WIDTH - 50
     o_bar = PCT_CELL_WIDTH - 50
-    append(f"<tr><td class='warnings' style='font-weight:bold'>WARNINGS PROCESADOS</td>"
+    append(f"<tr><td class='warnings' style='font-weight:bold'>{_('html.warnings').upper()}</td>"
            f"<td class='num' style='font-weight:bold'>{f_count_warnings_total}</td>"
            f"<td class='num' style='width:{PCT_CELL_WIDTH}px; display:flex; align-items:center; gap:6px;'>"
            f"<span style='flex:none; font-weight:bold'>{f_pct}</span>"
@@ -637,7 +638,7 @@ def generate_analyzer_html(analysis_data, html_file):
         return fp
     
     # Header y CSS
-    html_out.extend(_generate_html_header("Informe Checkpatch Analyzer", timestamp))
+    html_out.extend(_generate_html_header(_('html.analyzer_title'), timestamp))
     
     # ============================
     # RESUMEN GLOBAL
@@ -661,12 +662,12 @@ def generate_analyzer_html(analysis_data, html_file):
     
     PCT_CELL_WIDTH = 220
     
-    append("<h2>Resumen global</h2>")
+    append(f"<h2>{_('html.global_summary')}</h2>")
     append("<table>")
-    append(f"<tr><th>Estado</th><th>Ficheros</th>"
-           f"<th style='width:{PCT_CELL_WIDTH}px;'>% Ficheros</th>"
-           f"<th>Casos</th>"
-           f"<th style='width:{PCT_CELL_WIDTH}px;'>% Casos</th></tr>")
+    append(f"<tr><th>{_('html.status')}</th><th>{_('html.files')}</th>"
+           f"<th style='width:{PCT_CELL_WIDTH}px;'>{_('html.files_percent')}</th>"
+           f"<th>{_('html.cases')}</th>"
+           f"<th style='width:{PCT_CELL_WIDTH}px;'>{_('html.cases_percent')}</th></tr>")
     
     for key, cls, f_count, o_count in [
         ("errors", "errors", files_errors, occ_errors),
@@ -815,7 +816,7 @@ def generate_detail_reason_html(analysis_data, html_file):
     timestamp = _format_timestamp()
     
     # Header minimalista
-    html_out.extend(_generate_html_header("Informe Checkpatch - Detalle por motivo", timestamp))
+    html_out.extend(_generate_html_header(f"{_('html.analyzer_title')} - {_('html.detail_by_reason')}", timestamp))
     
     # ERRORES - Detallado
     if error_reasons:
@@ -888,7 +889,7 @@ def generate_detail_file_html(analysis_data, html_file):
         return fp
     
     # Header y CSS
-    html_out.extend(_generate_html_header("Informe Checkpatch - Detalle por fichero", timestamp))
+    html_out.extend(_generate_html_header(f"{_('html.analyzer_title')} - {_('html.detail_by_file')}", timestamp))
     
     # JavaScript para abrir el desplegable al llegar por ancla
     append("<script>")
@@ -1249,7 +1250,7 @@ def generate_autofix_html(fixed_data, html_file):
     pct_total_files = (100.0 * total_files_fixed) / max(1, total_files)
     pct_total_occ = (100.0 * total_occ_fixed) / max(1, total_occ)
     
-    html_out.extend(_generate_html_header("Informe Checkpatch Autofix", timestamp))
+    html_out.extend(_generate_html_header(_('html.autofix_title'), timestamp))
     
     # CSS adicional específico para autofix
     append("<style>")
@@ -1405,7 +1406,7 @@ def generate_autofix_detail_reason_html(fixed_data, html_file):
     append = html_out.append
     timestamp = _format_timestamp()
     
-    html_out.extend(_generate_html_header("Autofix - Detalle por motivo", timestamp))
+    html_out.extend(_generate_html_header(f"{_('html.autofix_title')} - {_('html.detail_by_reason')}", timestamp))
     
     # CSS adicional específico
     append("<style>")
@@ -1457,7 +1458,7 @@ def generate_autofix_detail_file_html(fixed_data, html_file, kernel_dir="."):
     append = html_out.append
     timestamp = _format_timestamp()
     
-    html_out.extend(_generate_html_header("Autofix - Detalle por fichero", timestamp))
+    html_out.extend(_generate_html_header(f"{_('html.autofix_title')} - {_('html.detail_by_file')}", timestamp))
     
     # CSS adicional específico
     append("<style>")
@@ -1689,7 +1690,7 @@ def generate_compile_html(results, html_file, kernel_root=None):
     append("</div>")
     
     # Header
-    append(f"<h1>Informe de Compilación <span style='font-weight:normal'>{timestamp}</span></h1>")
+    append(f"<h1>{_('html.compile_title')} <span style='font-weight:normal'>{timestamp}</span></h1>")
     
     # Executive Summary con cajas de éxito
     append("<div class='stat-grid'>")

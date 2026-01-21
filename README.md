@@ -1,5 +1,7 @@
 # Checkpatch - Analyzer & Autofix System
 
+**🌍 [English version](README.en.md) | Versión en español**
+
 **Toda la documentación se encuentra en la carpeta `documentation/`** → [📚 Ver documentación](documentation/README.md)
 
 Sistema unificado para análisis y corrección automática de warnings/errores de **checkpatch.pl** (Linux kernel).
@@ -42,6 +44,22 @@ O ejecutar todo automáticamente:
 
 ---
 
+## 🌍 Soporte Multi-idioma
+
+El sistema soporta múltiples idiomas para la interfaz:
+
+```bash
+# Español (por defecto)
+./main.py --analyze /path/to/kernel --language es
+
+# Inglés
+./main.py --analyze /path/to/kernel --language en
+```
+
+Ver [INTERNATIONALIZATION.md](documentation/INTERNATIONALIZATION.md) para más detalles.
+
+---
+
 ## 📋 Estructura del Proyecto
 
 ```
@@ -52,13 +70,19 @@ checkpatch/
 ├── compile.py           # Módulo de compilación de archivos
 ├── report.py            # Generadores de HTML (8 reportes)
 ├── logger.py            # Sistema de logging unificado ⭐ NUEVO
+├── i18n.py              # Sistema de internacionalización ⭐ NUEVO
 ├── utils.py             # Utilidades comunes
 ├── constants.py         # Constantes y patterns
 ├── test_all.py          # Suite unificada de tests
 ├── run                  # Script automatizado
 │
-├── README.md            # Este archivo
+├── README.md            # Este archivo (Español)
+├── README.en.md         # English version ⭐ NUEVO
 ├── TESTING.md           # Guía de testing
+│
+├── i18n/                # Archivos de idiomas ⭐ NUEVO
+│   ├── es.json                 # Traducciones en español
+│   └── en.json                 # Traducciones en inglés
 │
 ├── documentation/       # Documentación completa
 │   ├── README.md                # Índice de documentación ⭐
@@ -66,6 +90,7 @@ checkpatch/
 │   ├── CHANGELOG.md             # Historial de cambios
 │   ├── HTML_REPORTS.md          # Estructura de reportes
 │   ├── QUICK_REFERENCE.md       # Guía rápida
+│   ├── INTERNATIONALIZATION.md  # Guía de i18n ⭐ NUEVO
 │   ├── COMPILATION_TROUBLESHOOTING.md
 │   ├── TESTING.md               # Guía de testing
 │   ├── FALSOS_POSITIVOS_ANALISIS.md
